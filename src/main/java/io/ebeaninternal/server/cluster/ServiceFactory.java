@@ -1,8 +1,8 @@
 package io.ebeaninternal.server.cluster;
 
+import io.ebean.config.ContainerConfig;
+import io.ebeaninternal.server.cluster.socket.SocketClusterAutoDiscoveryBroadcast;
 import io.ebeaninternal.server.cluster.socket.SocketClusterBroadcast;
-
-import java.util.Properties;
 
 /**
  * Factory for creating the ClusterBroadcast service.
@@ -10,11 +10,18 @@ import java.util.Properties;
 public class ServiceFactory implements ClusterBroadcastFactory {
 
   @Override
-  public ClusterBroadcast create(ClusterManager manager, Properties properties) {
+  public ClusterBroadcast create(
+          ClusterManager manager,
+          ContainerConfig config
+  ) {
+    SocketConfig socketConfig = new SocketConfig();
+    socketConfig.loadFromProperties(config.getProperties());
 
-    SocketConfig config = new SocketConfig();
-    config.loadFromProperties(properties);
-
-    return new SocketClusterBroadcast(manager, config);
+    if (socketConfig.isAutoDiscovery()) {
+      return new SocketClusterAutoDiscoveryBroadcast(manager, socketConfig);
+    } else {
+      return new SocketClusterBroadcast(manager, socketConfig);
+    }
   }
+
 }

@@ -12,7 +12,7 @@ public class SocketConfig {
   /**
    * This local server in host:port format.
    */
-  private String localHostPort;
+  private String localHostPort = "127.0.0.1:9942";
 
   /**
    * All the cluster members in host:port format.
@@ -23,7 +23,25 @@ public class SocketConfig {
 
   private Properties properties;
 
-  /**
+  private boolean isAutoDiscovery = false;
+
+  private String subDomain = "";
+
+  private int clusterPort = 4499;
+
+  public boolean isAutoDiscovery() {
+    return isAutoDiscovery;
+  }
+
+  public String getSubDomain() {
+    return subDomain;
+  }
+
+    public int getClusterPort() {
+        return clusterPort;
+    }
+
+    /**
    * Return the host and port for this server instance.
    */
   public String getLocalHostPort() {
@@ -73,11 +91,18 @@ public class SocketConfig {
     this.properties = properties;
     this.threadPoolName = getProperty("ebean.cluster.threadPoolName", threadPoolName);
     this.localHostPort = getProperty("ebean.cluster.localHostPort", localHostPort);
+    this.isAutoDiscovery = "auto".equals(getProperty("ebean.cluster.discovery", ""));
+    this.subDomain = getProperty("ebean.cluster.discovery.domain", "172");
+    this.clusterPort = Integer.parseInt(getProperty("ebean.cluster.discovery.port", "" + this.clusterPort));
 
-    String rawMembers = getProperty("ebean.cluster.members", "");
-    String[] split = rawMembers.split("[,;]");
-    for (String rawMember : split) {
-      members.add(rawMember.trim());
+    if (!isAutoDiscovery) {
+      String rawMembers = getProperty("ebean.cluster.members", "");
+      String[] split = rawMembers.split("[,;]");
+      for (String rawMember : split) {
+          if (!rawMember.trim().isEmpty()) {
+              members.add(rawMember.trim());
+          }
+      }
     }
   }
 
@@ -87,6 +112,6 @@ public class SocketConfig {
       return value.trim();
     }
     value = properties.getProperty(key, defaultValue);
-    return (value == null) ? null : value.trim();
+    return (value == null) ? defaultValue : value.trim();
   }
 }

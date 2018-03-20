@@ -13,8 +13,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -28,11 +30,11 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
   private final SocketClient local;
 
-  private final HashMap<String, SocketClient> clientMap;
+  private final Map<String, SocketClient> clientMap = new ConcurrentHashMap<>();
 
   private final SocketClusterListener listener;
 
-  private final SocketClient[] members;
+  private final CopyOnWriteArraySet<SocketClient> members = new CopyOnWriteArraySet<>();
 
   private final MessageReadWrite messageReadWrite;
 
@@ -49,18 +51,17 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     clusterLogger.info("Clustering using local[{}] members[{}]",localHostPort, members);
 
     this.local = new SocketClient(parseFullName(localHostPort));
-    this.clientMap = new HashMap<String, SocketClient>();
 
     for (String memberHostPort : members) {
       InetSocketAddress member = parseFullName(memberHostPort);
       SocketClient client = new SocketClient(member);
       if (!local.getHostPort().equalsIgnoreCase(client.getHostPort())) {
         // don't add the local one ...
+        this.members.add(client);
         clientMap.put(client.getHostPort(), client);
       }
     }
 
-    this.members = clientMap.values().toArray(new SocketClient[clientMap.size()]);
     this.listener = new SocketClusterListener(this, local.getPort(), config.getThreadPoolName());
   }
 
@@ -75,11 +76,12 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
     // count of online members
     int currentGroupSize = 0;
-    for (int i = 0; i < members.length; i++) {
-      if (members[i].isOnline()) {
+    for (SocketClient member : members) {
+      if (member.isOnline()) {
         ++currentGroupSize;
       }
     }
+
     long txnIn = countIncoming.get();
     long txnOut = countOutgoing.get();
 
@@ -96,14 +98,27 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     listener.shutdown();
   }
 
+  void addMember(SocketClient member) {
+    synchronized (clientMap) {
+      if (!clientMap.containsKey(member.getHostPort())) {
+        ClusterMessage h = ClusterMessage.register(local.getHostPort(), true);
+
+        member.register(h);
+        members.add(member);
+
+        clusterLogger.info("Discovered and added host {}", member.getHostPort());
+      }
+    }
+  }
+
   /**
    * Register with all the other members of the Cluster.
    */
   private void register() {
     ClusterMessage h = ClusterMessage.register(local.getHostPort(), true);
-    for (int i = 0; i < members.length; i++) {
-      boolean online = members[i].register(h);
-      clusterLogger.info("Register as online with member [{}]", members[i].getHostPort(), online);
+    for (SocketClient member : members) {
+      boolean online = member.register(h);
+      clusterLogger.info("Register as online with member [{}]", member.getHostPort(), online);
     }
   }
 
@@ -127,7 +142,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   }
 
   private void setMemberOnline(String fullName, boolean online) throws IOException {
-    synchronized (clientMap) {
+    synchronized (members) {
       clusterLogger.info("Cluster member [{}] online[{}]", fullName, online);
       SocketClient member = clientMap.get(fullName);
       member.setOnline(online);
@@ -149,8 +164,8 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   }
 
   private void broadcast(ClusterMessage msg) {
-    for (int i = 0; i < members.length; i++) {
-      send(members[i], msg);
+    for (SocketClient member : members) {
+      send(member, msg);
     }
   }
 
@@ -161,8 +176,8 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     clusterLogger.info("Leaving cluster");
     ClusterMessage h = ClusterMessage.register(local.getHostPort(), false);
     broadcast(h);
-    for (int i = 0; i < members.length; i++) {
-      members[i].disconnect();
+    for (SocketClient member : members) {
+      member.disconnect();
     }
   }
 
@@ -210,7 +225,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   /**
    * Parse a host:port into a InetSocketAddress.
    */
-  private InetSocketAddress parseFullName(String hostAndPort) {
+  InetSocketAddress parseFullName(String hostAndPort) {
 
     try {
       hostAndPort = hostAndPort.trim();
