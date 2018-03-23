@@ -47,7 +47,7 @@ class SocketClient {
 
   @Override
   public String toString() {
-    return address.toString();
+    return hostPort;
   }
 
   String getHostPort() {
@@ -97,8 +97,7 @@ class SocketClient {
         try {
           socket.close();
         } catch (IOException e) {
-          String msg = "Error disconnecting from Cluster member " + hostPort;
-          logger.info(msg, e);
+          logger.info("Error disconnecting from Cluster member {}", hostPort, e);
         }
         os = null;
         dataOutput = null;
@@ -127,6 +126,7 @@ class SocketClient {
   }
 
   void send(ClusterMessage msg) throws IOException {
+    logger.debug("SEND -> {}:{}; {}", address.getAddress().getHostAddress(), address.getPort(), msg);
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {

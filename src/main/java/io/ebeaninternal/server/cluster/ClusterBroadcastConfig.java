@@ -8,16 +8,17 @@ import java.util.Properties;
  * Configuration for clustering using TCP sockets.
  *
  * <ul>
- * <li><code>ebean.cluster.localHostPort</code> (Default:
+ * <li><code>ebean.cluster.localHostPort</code> (e.g.
  * <code>127.0.0.1:9942</code>) the local interface we bind to. If
  * auto-discovery is enabled, the IP is ignored, only the port is used</li>
  *
  * <li><code>ebean.cluster.discovery.enabled</code> (Default: false) controls,
  * if auto-discovery is enabled.</li>
  *
- * <li><code>ebean.cluster.discovery.net</code> (172.0.0.0/12) The network,
- * where auto discovery runs. The ClusterManager tries to auto detect the
- * interface.</li>
+ * <li><code>ebean.cluster.discovery.net</code> (e.g. 172.0.0.0/12, default is
+ * 'autodetect') The network, where auto discovery runs. The ClusterManager
+ * tries to auto detect the interface. If 'autodetect', the first active
+ * interface is taken.</li>
  *
  * <li><code>ebean.cluster.discovery.hostPort</code> (Default: 224.0.0.180:4446)
  * The Multicast address that is used to communicate with other instances. The
@@ -37,7 +38,7 @@ public class ClusterBroadcastConfig {
   /**
    * This local server in host:port format.
    */
-  private String localHostPort = "127.0.0.1:9942";
+  private String localHostPort = "";
 
   /**
    * All the cluster members in host:port format.
@@ -50,7 +51,7 @@ public class ClusterBroadcastConfig {
 
   private boolean isAutoDiscovery = false;
 
-  private String discoveryNet = "172.0.0.0/12";
+  private String discoveryNet = "autodetect";
 
   private String discoveryHostPort = "224.0.0.180:4446";
 

@@ -7,7 +7,6 @@ import java.net.DatagramPacket;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
 import java.net.SocketException;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +37,7 @@ public class BroadcastListener implements Runnable {
   private boolean doingShutdown;
 
   private final SocketClusterAutoDiscoveryBroadcast scb;
-  private final CopyOnWriteArraySet<BroadcastMessage> members = new CopyOnWriteArraySet<>();
+  //private final CopyOnWriteArraySet<BroadcastMessage> members = new CopyOnWriteArraySet<>();
 
   private final BroadcastMessage myMessage;
 
@@ -56,15 +55,14 @@ public class BroadcastListener implements Runnable {
   }
 
   private void addMember(BroadcastMessage member) {
-    if (!myMessage.getHostGroup().equals(member.getHostGroup())) {
-      logger.debug("Not adding clusterpartner {} to hostgroup {}", member, myMessage.getHostGroup());
+    if (!myMessage.getDiscoveryGroup().equals(member.getDiscoveryGroup())) {
+      logger.debug("Broadcast message '{}' not for discoveryGroup '{}'", member, myMessage.getDiscoveryGroup());
     } else if (myMessage.equals(member)) {
-      logger.trace("Not adding myself", member);
-    } else if (members.add(member)) {
-      logger.info("Adding clusterpartner {}", member);
-      scb.addMember(member.getHostIp(), member.getClusterPort());
+      logger.trace("skip message from myself", member);
+    } else if (scb.addMember(member.getHostIp(), member.getClusterPort())) {
+      logger.info("Broadcast message '{}' processed successfully", member);
     } else {
-      logger.trace("Clusterpartner {} already added", member);
+      logger.trace("Broadcast message '{}' already processed", member);
     }
   }
 
@@ -78,7 +76,9 @@ public class BroadcastListener implements Runnable {
         broadcastSocket.receive(packet);
 
         BroadcastMessage message = new BroadcastMessage(buf);
-        logger.trace("Broadcast received from: {}, message: {}",  packet.getSocketAddress(), message);
+
+        logger.trace("Incoming broadcast: '{}' from {}:{}",
+            message, packet.getAddress().getHostAddress(),packet.getPort());
         addMember(message);
       } catch (SocketException e) {
         if (doingShutdown) {

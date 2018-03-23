@@ -50,15 +50,13 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
     String localHostPort = config.getLocalHostPort();
     InetSocketAddress addr = parseFullName(localHostPort);
 
-    String[] net = config.getDiscoveryNet().split("\\/");
-    int subnet = parseIpV4(net[0]);
-    int mask = parseIpV4(net[1]);
 
-    String hostAddress = getHostaddress(subnet, mask);
-    if (hostAddress == null) {
-      logger.warn("No interface found for {}", config.getDiscoveryNet());
+
+    InetAddress inetAddress = getInetAddress(config.getDiscoveryNet());
+    if (inetAddress == null) {
+      clusterLogger.warn("No interface found for subnet '{}'", config.getDiscoveryNet());
     } else {
-      addr = new InetSocketAddress(hostAddress, addr.getPort());
+      addr = new InetSocketAddress(inetAddress, addr.getPort());
       this.broadcastMessage = new BroadcastMessage(config.getDiscoveryGroup(),
           addr.getAddress().getHostAddress(),
           addr.getPort());
@@ -93,10 +91,19 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
   /**
    * Returns the host address of the network card that starts with <code>ipPrefix</code>
    */
-  private String getHostaddress(int subnet , int mask) {
-    Enumeration<NetworkInterface> nics;
+  private InetAddress getInetAddress(String net) {
+    if ("autodetect".equals(net)) {
+      return getActiveInetAddress();
+    } else {
+      String[] tmp = net.split("\\/");
+      int subnet = parseIpV4(tmp[0]);
+      int mask = parseIpV4(tmp[1]);
+      return getInetAddress(subnet, mask);
+    }
+  }
+  private InetAddress getInetAddress(int subnet, int mask) {
     try {
-      nics = NetworkInterface.getNetworkInterfaces();
+      Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
       while (nics.hasMoreElements()) {
         NetworkInterface nic = nics.nextElement();
         Enumeration<InetAddress> nicIps = nic.getInetAddresses();
@@ -104,12 +111,44 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
           InetAddress nicIp = nicIps.nextElement();
           int ipAsInt = addrToInt(nicIp);
           if (( ipAsInt & mask) == subnet) {
-            return nicIp.getHostAddress();
+            clusterLogger.info("Netmask[{}]: IP {} is used for auto-discovery - {}", nicIp.getHostAddress(), nic.getDisplayName());
+            return nicIp;
           }
         }
       }
     } catch (SocketException e) {
       logger.error("Error while searching for host address", e);
+    }
+    return null;
+  }
+  private InetAddress getActiveInetAddress() {
+    NetworkInterface ret = null;
+    try {
+      final Enumeration<NetworkInterface> e = NetworkInterface.getNetworkInterfaces();
+      while (e.hasMoreElements()) {
+        NetworkInterface nic = e.nextElement();
+        logger.trace("Interface {} [up:{}, lo:{}, virt:{}] {}",
+            nic.getName(), nic.isUp(), nic.isLoopback(), nic.isVirtual(), nic.getDisplayName());
+        if (nic.isUp()) {
+          if (ret == null) {
+            ret = nic; // take first interface, that is up
+          } else if (ret.isLoopback() && !nic.isLoopback()) {
+            ret = nic; // prefer non loopback interfaces
+          }else if (ret.isVirtual() && !nic.isVirtual()) {
+            ret = nic; // prefer non virtual interfaces
+          }
+        }
+      }
+    } catch (SocketException e) {
+      logger.error("Error while searching for active interface", e);
+    }
+    if (ret != null) {
+      Enumeration<InetAddress> ips = ret.getInetAddresses();
+      while (ips.hasMoreElements()) {
+        InetAddress nicIp = ips.nextElement();
+        clusterLogger.info("Autodetect: IP {} is used for auto-discovery - {}", nicIp.getHostAddress(), ret.getDisplayName());
+        return nicIp;
+      }
     }
     return null;
   }

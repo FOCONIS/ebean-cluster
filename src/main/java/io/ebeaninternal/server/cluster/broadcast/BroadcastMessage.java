@@ -22,12 +22,12 @@ public class BroadcastMessage implements Serializable {
 
   private static final long serialVersionUID = 8861907251314300963L;
 
-  private final String hostGroup;
+  private final String discoveryGroup;
   private final String hostIp;
   private final int clusterPort;
 
-  public BroadcastMessage(String hostGroup, String hostName, int hostPort) {
-    this.hostGroup = hostGroup;
+  public BroadcastMessage(String discoveryGroup, String hostName, int hostPort) {
+    this.discoveryGroup = discoveryGroup;
     this.hostIp = hostName;
     this.clusterPort = hostPort;
   }
@@ -40,7 +40,7 @@ public class BroadcastMessage implements Serializable {
       if (in.readLong() != serialVersionUID) {
         throw new InvalidObjectException("magic number does not match");
       }
-      hostGroup = in.readUTF();
+      discoveryGroup = in.readUTF();
       hostIp = in.readUTF();
       clusterPort = in.readInt();
     }
@@ -53,7 +53,7 @@ public class BroadcastMessage implements Serializable {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (  DataOutputStream out = new DataOutputStream(baos)) {
       out.writeLong(serialVersionUID);
-      out.writeUTF(hostGroup);
+      out.writeUTF(discoveryGroup);
       out.writeUTF(hostIp);
       out.writeInt(clusterPort);
     } catch (IOException e) {}
@@ -61,8 +61,8 @@ public class BroadcastMessage implements Serializable {
     return baos.toByteArray();
   }
 
-  public String getHostGroup() {
-    return hostGroup;
+  public String getDiscoveryGroup() {
+    return discoveryGroup;
   }
 
   public String getHostIp() {
@@ -75,12 +75,15 @@ public class BroadcastMessage implements Serializable {
 
   @Override
   public String toString() {
-    return hostGroup + "/" + hostIp + ":" + clusterPort;
+    StringBuilder sb = new StringBuilder();
+    sb.append(discoveryGroup).append('@');
+    sb.append(hostIp).append(':').append(clusterPort);
+    return sb.toString();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(hostGroup, hostIp) + clusterPort;
+    return Objects.hash(discoveryGroup, hostIp) + clusterPort;
   }
 
   @Override
@@ -90,10 +93,11 @@ public class BroadcastMessage implements Serializable {
     } else if (obj instanceof BroadcastMessage) {
       BroadcastMessage other = (BroadcastMessage)obj;
       return other.clusterPort == clusterPort
-          && Objects.equals(other.hostGroup, hostGroup)
+          && Objects.equals(other.discoveryGroup, discoveryGroup)
           && Objects.equals(other.hostIp, hostIp);
     } else  {
       return false;
     }
   }
+
 }

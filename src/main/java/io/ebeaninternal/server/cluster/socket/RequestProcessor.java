@@ -54,7 +54,7 @@ class RequestProcessor implements Runnable {
       sc.disconnect();
 
     } catch (Exception e) {
-      logger.error("Error listening for messages - " + owner.getHostPort(), e);
+      logger.error("Error listening for messages - {}", owner.getHostPort(), e);
     }
   }
 

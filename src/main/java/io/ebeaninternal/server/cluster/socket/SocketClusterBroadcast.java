@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SocketClusterBroadcast implements ClusterBroadcast {
 
-  private static final Logger clusterLogger = LoggerFactory.getLogger("org.avaje.ebean.Cluster");
+  public static final Logger clusterLogger = LoggerFactory.getLogger("io.ebean.Cluster");
 
   private static final Logger logger = LoggerFactory.getLogger(SocketClusterBroadcast.class);
 
@@ -113,6 +113,11 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
       ClusterMessage msg = ClusterMessage.register(member.getHostPort(), true);
       member.register(msg);
       clusterLogger.info("Discovered and added host {}", member.getHostPort());
+      if (clusterLogger.isDebugEnabled()) {
+        for (SocketClient m : clientMap.values()) {
+          clusterLogger.debug("Member: {}, online: {}", m.getHostPort(), m.isOnline());
+        }
+      }
       return true;
     } else {
       return false;
@@ -134,9 +139,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
     try {
       // alternative would be to connect/disconnect here but prefer to use keep alive
-      if (logger.isTraceEnabled()) {
-        logger.trace("... send to member {} broadcast msg: {}", client, msg);
-      }
+      logger.trace("... send to member {} broadcast msg: {}", client, msg);
       client.send(msg);
 
     } catch (Exception ex) {
@@ -197,9 +200,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
     try {
       ClusterMessage message = ClusterMessage.read(request.getDataInputStream());
-      if (logger.isTraceEnabled()) {
-        logger.trace("... received msg: {}", message);
-      }
+      logger.debug("RECV <- {}:{}; {}", request.getSourceAddress(), request.getSourcePort(), message);
 
       if (message.isRegisterEvent()) {
         setMemberOnline(message.getRegisterHost(), message.isRegister());

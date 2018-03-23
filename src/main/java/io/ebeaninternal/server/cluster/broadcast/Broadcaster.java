@@ -36,14 +36,21 @@ public class Broadcaster implements Runnable {
   private final DatagramPacket packet;
 
   /**
+   * The broadcast message (for logging).
+   */
+  private final BroadcastMessage message;
+
+  /**
    * The interval in milliseconds.
    */
   private final int broadcastInterval;
+
 
   /**
    * shutting down flag.
    */
   private boolean doingShutdown;
+
 
   /**
    * Create a new broadcaster.
@@ -61,6 +68,7 @@ public class Broadcaster implements Runnable {
     byte[] buf = message.getBytes();
     packet = new DatagramPacket(buf, buf.length, address);
 
+    this.message = message;
     this.broadcasterThread = new Thread(this, "EbeanClusterBroadcaster");
     this.broadcastSocket = new MulticastSocket(address.getPort());
     this.broadcastSocket.setSoTimeout(60000);
@@ -73,11 +81,11 @@ public class Broadcaster implements Runnable {
     while (!doingShutdown) {
       try {
         broadcastSocket.send(packet);
-        logger.trace("broadcast sent: {}", packet.getSocketAddress());
+        logger.trace("Sending broadcast '{}' to {}:{}", message, packet.getAddress().getHostAddress(), packet.getPort());
         Thread.sleep(broadcastInterval);
       } catch (SocketException e) {
         if (doingShutdown) {
-          logger.debug("doingShutdown and accept threw:" + e.getMessage());
+          logger.debug("doingShutdown and accept threw: {}", e.getMessage());
         } else {
           logger.error("Error while listening", e);
         }
