@@ -9,11 +9,19 @@ import java.io.IOException;
  */
 public class ClusterMessage {
 
+  private static final int TYPE_TRANSACTION = 0;
+  private static final int TYPE_REGISTER = 1;
+  private static final int TYPE_UNREGISTER = 2;
+  private static final int TYPE_PING = 3;
+  private static final int TYPE_PONG = 4;
+
+  private final int eventType;
+
   private final String registerHost;
 
-  private final boolean register;
-
   private final byte[] data;
+
+  private final long timestamp;
 
   /**
    * Create a register message.
@@ -30,29 +38,48 @@ public class ClusterMessage {
   }
 
   /**
+   * Create a ping message.
+   */
+  public static ClusterMessage ping() {
+    return new ClusterMessage(TYPE_PING, System.currentTimeMillis());
+  }
+
+  /**
    * Create for register online/offline message.
    */
   private ClusterMessage(String registerHost, boolean register) {
     this.registerHost = registerHost;
-    this.register = register;
+    this.eventType = register ? TYPE_REGISTER : TYPE_UNREGISTER;
     this.data = null;
+    this.timestamp = 0;
   }
 
   /**
    * Create for a transaction message.
    */
   private ClusterMessage(byte[] data) {
+    this.eventType = TYPE_TRANSACTION;
     this.data = data;
     this.registerHost = null;
-    this.register = false;
+    this.timestamp = 0;
+  }
+
+  /**
+   * Create for ping & pong.
+   */
+  private ClusterMessage(int type, long timestamp) {
+    this.eventType = type;
+    this.data = null;
+    this.registerHost = null;
+    this.timestamp = timestamp;
   }
 
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     if (registerHost != null) {
-      sb.append("register ");
-      sb.append(register);
+      sb.append("type ");
+      sb.append(eventType);
       sb.append(" ");
       sb.append(registerHost);
     } else {
@@ -65,7 +92,7 @@ public class ClusterMessage {
    * Return true if this is a register event as opposed to a transaction message.
    */
   public boolean isRegisterEvent() {
-    return registerHost != null;
+    return eventType == TYPE_REGISTER || eventType == TYPE_UNREGISTER;
   }
 
   /**
@@ -79,7 +106,21 @@ public class ClusterMessage {
    * Return true if register is true for a online/offline message.
    */
   public boolean isRegister() {
-    return register;
+    return eventType == TYPE_REGISTER;
+  }
+
+  /**
+   * Return true if register is true for a online/offline message.
+   */
+  public boolean isPing() {
+    return eventType == TYPE_REGISTER;
+  }
+
+  /**
+   * Return true if register is true for a online/offline message.
+   */
+  public boolean isPong() {
+    return eventType == TYPE_REGISTER;
   }
 
   /**
@@ -94,15 +135,14 @@ public class ClusterMessage {
    */
   public void write(DataOutputStream dataOutput) throws IOException {
 
-    boolean dataMessage = data != null;
-    dataOutput.writeBoolean(dataMessage);
-    if (dataMessage) {
+    dataOutput.writeInt(eventType);
+    if (eventType == TYPE_TRANSACTION) {
       dataOutput.writeInt(data.length);
       dataOutput.write(data);
-    } else {
-      // write register message
+    } else if (isRegisterEvent()){
       dataOutput.writeUTF(getRegisterHost());
-      dataOutput.writeBoolean(isRegister());
+    } else if (eventType == TYPE_PING || eventType == TYPE_PONG) {
+      dataOutput.writeLong(timestamp);
     }
     dataOutput.flush();
   }
@@ -111,19 +151,31 @@ public class ClusterMessage {
    * Read the message from binary form.
    */
   public static ClusterMessage read(DataInputStream dataInput) throws IOException {
-
-    boolean dataMessage = dataInput.readBoolean();
-    if (dataMessage) {
-      int length = dataInput.readInt();
-      byte[] data = new byte[length];
-      dataInput.readFully(data);
-      return new ClusterMessage(data);
-
-    } else {
-      String host = dataInput.readUTF();
-      boolean registered = dataInput.readBoolean();
-      return new ClusterMessage(host, registered);
+    int type = dataInput.read();
+    switch(type) {
+      case TYPE_TRANSACTION:
+        int length = dataInput.readInt();
+        byte[] data = new byte[length];
+        dataInput.readFully(data);
+        return new ClusterMessage(data);
+      case TYPE_REGISTER:
+      case TYPE_UNREGISTER:
+        String host = dataInput.readUTF();
+        return new ClusterMessage(host, type == TYPE_REGISTER);
+      case TYPE_PING:
+      case TYPE_PONG:
+        return new ClusterMessage(type, dataInput.readLong());
+      default:
+        throw new UnsupportedOperationException("Unknown type: " + type);
     }
+  }
+
+  public ClusterMessage getPong() {
+    return new ClusterMessage(TYPE_PONG, timestamp);
+  }
+
+  public long getTimestamp() {
+    return timestamp;
   }
 
 }

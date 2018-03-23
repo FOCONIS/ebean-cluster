@@ -6,6 +6,7 @@ import io.ebeaninternal.server.cluster.ClusterBroadcastConfig;
 import io.ebeaninternal.server.cluster.message.ClusterMessage;
 import io.ebeaninternal.server.cluster.message.MessageReadWrite;
 import io.ebeaninternal.server.transaction.RemoteTransactionEvent;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,8 +176,18 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     } catch (Exception e) {
       logger.error("Error sending RemoteTransactionEvent " + remoteTransEvent + " to cluster members.", e);
     }
+    ping();
   }
 
+  public void ping() {
+    try {
+      countOutgoing.incrementAndGet();
+      ClusterMessage msg = ClusterMessage.ping();
+      broadcast(msg);
+    } catch (Exception e) {
+      logger.error("Error sending Ping to cluster members.", e);
+    }
+  }
   private void broadcast(ClusterMessage msg) {
     for (SocketClient member : clientMap.values()) {
       send(member, msg);
@@ -206,7 +217,10 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
       ClusterMessage message = ClusterMessage.read(request.getDataInputStream());
       logger.debug("RECV <- {}:{}; {}", request.getSourceAddress(), request.getSourcePort(), message);
 
-      if (message.isRegisterEvent()) {
+      if (message.isPing()) {
+        SocketClient member = clientMap.get(request.getSourceAddress()+":"+request.getSourcePort());
+        member.send(message.getPong());
+      } if (message.isRegisterEvent()) {
         if (local.getHostPort().equals(message.getRegisterHost())) {
           clusterLogger.warn("Got invalid registerEvent for this host from {}:{}", request.getSourceAddress(), request.getSourcePort());
         } else {
