@@ -54,10 +54,10 @@ public class BroadcastListener implements Runnable {
     this.myMessage = myMessage;
   }
 
-  private void addMember(BroadcastMessage member) {
+  private void addMember(BroadcastMessage member) throws IOException {
     if (!myMessage.getDiscoveryGroup().equals(member.getDiscoveryGroup())) {
       logger.debug("Broadcast message '{}' not for discoveryGroup '{}'", member, myMessage.getDiscoveryGroup());
-    } else if (myMessage.equals(member)) {
+    } else if (myMessage.equals(member)) { // group, ip & port are equal.
       logger.trace("skip message from myself", member);
     } else if (scb.addMember(member.getHostIp(), member.getClusterPort())) {
       logger.info("Broadcast message '{}' processed successfully", member);

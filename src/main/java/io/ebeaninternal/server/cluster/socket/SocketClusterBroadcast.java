@@ -104,21 +104,19 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     listener.shutdown();
   }
 
-  public boolean addMember(String hostIp, int clusterPort) {
+  public boolean addMember(String hostIp, int clusterPort) throws IOException {
     return addMember(new SocketClient(new InetSocketAddress(hostIp, clusterPort)));
   }
 
-  boolean addMember(SocketClient member) {
+  boolean addMember(SocketClient member) throws IOException {
+    assert !local.getHostPort().equals(member.getHostPort()) : "cannot add myself";
+
     if (clientMap.putIfAbsent(member.getHostPort(), member) == null) {
       // send register message back to the member. Use our address
       ClusterMessage msg = ClusterMessage.register(local.getHostPort(), true);
       member.register(msg);
-      clusterLogger.info("Discovered and added host {}", member.getHostPort());
-      if (clusterLogger.isDebugEnabled()) {
-        for (SocketClient m : clientMap.values()) {
-          clusterLogger.debug("Member: {}, online: {}", m.getHostPort(), m.isOnline());
-        }
-      }
+
+      setMemberOnline(member.getHostPort(), true);
       return true;
     } else {
       return false;
@@ -157,6 +155,11 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     clusterLogger.info("Cluster member [{}] online[{}]", fullName, online);
     SocketClient member = clientMap.computeIfAbsent(fullName, key -> new SocketClient(parseFullName(key)));
     member.setOnline(online);
+    if (clusterLogger.isDebugEnabled()) {
+      for (SocketClient m : clientMap.values()) {
+        clusterLogger.debug("Member: {}, online: {}", m.getHostPort(), m.isOnline());
+      }
+    }
   }
 
   /**
@@ -204,7 +207,11 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
       logger.debug("RECV <- {}:{}; {}", request.getSourceAddress(), request.getSourcePort(), message);
 
       if (message.isRegisterEvent()) {
-        setMemberOnline(message.getRegisterHost(), message.isRegister());
+        if (local.getHostPort().equals(message.getRegisterHost())) {
+          clusterLogger.warn("Got invalid registerEvent for this host from {}:{}", request.getSourceAddress(), request.getSourcePort());
+        } else {
+          setMemberOnline(message.getRegisterHost(), message.isRegister());
+        }
 
       } else {
         countIncoming.incrementAndGet();

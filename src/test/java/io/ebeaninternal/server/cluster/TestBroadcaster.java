@@ -7,11 +7,12 @@ package io.ebeaninternal.server.cluster;
 
 import java.util.Properties;
 
-import org.mockito.Mockito;
 import org.testng.annotations.Test;
 
 import io.ebean.EbeanServer;
 import io.ebean.config.ContainerConfig;
+import io.ebean.testdouble.TDSpiEbeanServer;
+import io.ebeaninternal.server.transaction.RemoteTransactionEvent;
 
 /**
  * TODO.
@@ -20,6 +21,20 @@ import io.ebean.config.ContainerConfig;
  *
  */
 public class TestBroadcaster {
+
+  private class TestServer extends TDSpiEbeanServer {
+
+    RemoteTransactionEvent event;
+
+    TestServer(String name) {
+      super(name);
+    }
+
+    @Override
+    public void remoteTransactionEvent(RemoteTransactionEvent event) {
+      this.event = event;
+    }
+  }
 
   /**
    * @param args
@@ -35,12 +50,15 @@ public class TestBroadcaster {
     ClusterManager manager = new ClusterManager(containerConfig );
 
 
-    EbeanServer server = Mockito.mock(EbeanServer.class);
-    Mockito.when(server.getName()).thenReturn("test");
+    EbeanServer server = new TestServer("test");
 
     manager.registerServer(server );
-
-    Thread.sleep(1000000);
+    for (int i = 0 ; i <  100 ; i++) {
+      Thread.sleep((int)(Math.random()*10000));
+      RemoteTransactionEvent event = new RemoteTransactionEvent("test");
+      event.cacheClearAll();
+      manager.broadcast(event);
+    }
     manager.shutdown();
 
   }

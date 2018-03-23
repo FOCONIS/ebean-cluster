@@ -142,8 +142,10 @@ class SocketClient {
    * Set whether the client is thought to be online.
    */
   private void setOnline() throws IOException {
-    connect();
-    this.online = true;
+    if (!online) {
+      connect();
+      this.online = true;
+    }
   }
 
   private void connect() throws IOException {
