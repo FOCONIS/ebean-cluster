@@ -10,17 +10,15 @@ import io.ebeaninternal.server.cluster.socket.SocketClusterBroadcast;
 public class ServiceFactory implements ClusterBroadcastFactory {
 
   @Override
-  public ClusterBroadcast create(
-          ClusterManager manager,
-          ContainerConfig config
-  ) {
-    SocketConfig socketConfig = new SocketConfig();
-    socketConfig.loadFromProperties(config.getProperties());
+  public ClusterBroadcast create(ClusterManager manager, ContainerConfig containerConfig) {
 
-    if (socketConfig.isAutoDiscovery()) {
-      return new SocketClusterAutoDiscoveryBroadcast(manager, socketConfig);
+    SocketConfig config = new SocketConfig();
+    config.loadFromProperties(containerConfig.getProperties());
+
+    if (config.isAutoDiscovery()) {
+      return new SocketClusterAutoDiscoveryBroadcast(manager, config);
     } else {
-      return new SocketClusterBroadcast(manager, socketConfig);
+      return new SocketClusterBroadcast(manager, config);
     }
   }
 

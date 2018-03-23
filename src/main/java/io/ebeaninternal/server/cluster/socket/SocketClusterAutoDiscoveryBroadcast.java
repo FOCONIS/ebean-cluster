@@ -25,33 +25,51 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
 
   private static final Logger logger = LoggerFactory.getLogger(SocketClusterAutoDiscoveryBroadcast.class);
 
-  private String localHostname;
+  private final InetSocketAddress discoveryAddresss;
 
-  private BroadcastListener listener;
-  private Broadcaster broadcaster;
-
-  private InetSocketAddress discoveryAddresss;
+  private final int discoveryInterval;
 
   private BroadcastMessage broadcastMessage;
 
+  private BroadcastListener listener;
+
+  private Broadcaster broadcaster;
+
+
   public SocketClusterAutoDiscoveryBroadcast(ClusterManager manager, SocketConfig config) {
     super(manager, config);
-
     this.discoveryAddresss = parseFullName(config.getDiscoveryHostPort());
+    this.discoveryInterval = config.getDiscoveryInterval();
+  }
+
+  /**
+   * Tries to find the correct network interface.
+   */
+  @Override
+  protected SocketClient configureSocketClient(SocketConfig config) {
+    String localHostPort = config.getLocalHostPort();
+    InetSocketAddress addr = parseFullName(localHostPort);
 
     String[] net = config.getDiscoveryNet().split("\\/");
     int subnet = parseIpV4(net[0]);
     int mask = parseIpV4(net[1]);
 
-    this.localHostname = getHostaddress(subnet, mask);
-    if (localHostname == null) {
+    String hostAddress = getHostaddress(subnet, mask);
+    if (hostAddress == null) {
       logger.warn("No interface found for {}", config.getDiscoveryNet());
+    } else {
+      addr = new InetSocketAddress(hostAddress, addr.getPort());
+      this.broadcastMessage = new BroadcastMessage(config.getDiscoveryGroup(),
+          addr.getAddress().getHostAddress(),
+          addr.getPort());
     }
-    this.broadcastMessage = new BroadcastMessage(
-        config.getDiscoveryGroup(),
-        localHostname, local.getPort());
+    return new SocketClient(addr);
+
   }
 
+  /**
+   * Parses the IPv4 address. (Sorry no IPv6 yet)
+   */
   private int parseIpV4(String ip) {
     try {
       int prefix = Integer.parseInt(ip);
@@ -100,17 +118,19 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
   public void startup() {
     super.startup();
 
-    if (localHostname != null) {
+    if (broadcastMessage != null) {
       try {
-      listener = new BroadcastListener(discoveryAddresss, broadcastMessage,  this);
-        broadcaster = new Broadcaster(discoveryAddresss, 3000, broadcastMessage );
-
+        listener = new BroadcastListener(discoveryAddresss, broadcastMessage, this);
         listener.startListening();
+      } catch (IOException e) {
+        logger.error("Error starting the discovery BroadcastListener", e);
+      }
+      try {
+        broadcaster = new Broadcaster(discoveryAddresss, discoveryInterval, broadcastMessage);
         broadcaster.startBroadcasting();
       } catch (IOException e) {
-        logger.error("Error startin the Discovery");
+        logger.error("Error starting the discovery broadcaster", e);
       }
-
     }
   }
 

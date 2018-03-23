@@ -2,6 +2,7 @@ package io.ebeaninternal.server.cluster.message;
 
 import io.ebeaninternal.api.SpiEbeanServer;
 import io.ebeaninternal.api.TransactionEventTable;
+import io.ebeaninternal.server.cache.RemoteCacheEvent;
 import io.ebeaninternal.server.cluster.BinaryMessage;
 import io.ebeaninternal.server.cluster.ClusterManager;
 import io.ebeaninternal.server.transaction.BeanPersistIds;
@@ -57,6 +58,10 @@ class BinaryDataReader {
 
       case BinaryMessage.TYPE_TABLEIUD:
         event.addTableIUD(TransactionEventTable.TableIUD.readBinaryMessage(dataInput));
+        break;
+
+      case BinaryMessage.TYPE_CACHE:
+        event.addRemoteCacheEvent(RemoteCacheEvent.readBinaryMessage(dataInput));
         break;
 
       default:
