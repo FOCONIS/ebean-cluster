@@ -23,12 +23,12 @@ public class BroadcastMessage implements Serializable {
   private static final long serialVersionUID = 8861907251314300963L;
 
   private final String hostGroup;
-  private final String hostName;
+  private final String hostIp;
   private final int clusterPort;
 
   public BroadcastMessage(String hostGroup, String hostName, int hostPort) {
     this.hostGroup = hostGroup;
-    this.hostName = hostName;
+    this.hostIp = hostName;
     this.clusterPort = hostPort;
   }
 
@@ -41,7 +41,7 @@ public class BroadcastMessage implements Serializable {
         throw new InvalidObjectException("magic number does not match");
       }
       hostGroup = in.readUTF();
-      hostName = in.readUTF();
+      hostIp = in.readUTF();
       clusterPort = in.readInt();
     }
   }
@@ -54,7 +54,7 @@ public class BroadcastMessage implements Serializable {
     try (  DataOutputStream out = new DataOutputStream(baos)) {
       out.writeLong(serialVersionUID);
       out.writeUTF(hostGroup);
-      out.writeUTF(hostName);
+      out.writeUTF(hostIp);
       out.writeInt(clusterPort);
     } catch (IOException e) {}
 
@@ -65,8 +65,8 @@ public class BroadcastMessage implements Serializable {
     return hostGroup;
   }
 
-  public String getHostName() {
-    return hostName;
+  public String getHostIp() {
+    return hostIp;
   }
 
   public int getClusterPort() {
@@ -75,12 +75,12 @@ public class BroadcastMessage implements Serializable {
 
   @Override
   public String toString() {
-    return hostGroup + "/" + hostName + ":" + clusterPort;
+    return hostGroup + "/" + hostIp + ":" + clusterPort;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(hostGroup, hostName) + clusterPort;
+    return Objects.hash(hostGroup, hostIp) + clusterPort;
   }
 
   @Override
@@ -91,7 +91,7 @@ public class BroadcastMessage implements Serializable {
       BroadcastMessage other = (BroadcastMessage)obj;
       return other.clusterPort == clusterPort
           && Objects.equals(other.hostGroup, hostGroup)
-          && Objects.equals(other.hostName, hostName);
+          && Objects.equals(other.hostIp, hostIp);
     } else  {
       return false;
     }

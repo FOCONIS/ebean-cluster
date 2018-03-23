@@ -42,9 +42,10 @@ class SocketClient {
   SocketClient(InetSocketAddress address) {
     this.lock = new ReentrantLock(false);
     this.address = address;
-    this.hostPort = address.getHostName() + ":" + address.getPort();
+    this.hostPort = address.getAddress().getHostAddress() + ":" + address.getPort();
   }
 
+  @Override
   public String toString() {
     return address.toString();
   }

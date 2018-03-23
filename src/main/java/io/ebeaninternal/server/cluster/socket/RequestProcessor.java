@@ -39,6 +39,7 @@ class RequestProcessor implements Runnable {
    * <P>Dev Note: the command parsing is processed here so that it is preformed
    * by the assigned thread rather than the listeners thread.</P>
    */
+  @Override
   public void run() {
     try {
       logger.trace("start listening for cluster messages");

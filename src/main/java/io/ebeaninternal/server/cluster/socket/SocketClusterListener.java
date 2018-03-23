@@ -111,6 +111,7 @@ class SocketClusterListener implements Runnable {
    * This is a runnable and so this must be public. Don't call this externally
    * but rather call the startListening() method.
    */
+  @Override
   public void run() {
     // run in loop until doingShutdown is true...
     while (!doingShutdown) {

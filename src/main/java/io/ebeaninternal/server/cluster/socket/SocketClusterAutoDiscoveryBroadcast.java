@@ -23,15 +23,9 @@ import java.util.Enumeration;
  */
 public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast {
 
-  private static final Logger clusterLogger = LoggerFactory.getLogger("org.avaje.ebean.Cluster");
-
   private static final Logger logger = LoggerFactory.getLogger(SocketClusterAutoDiscoveryBroadcast.class);
 
   private String localHostname;
-  private int localClusterPort;
-
-  private String disc;
-  private int broadcastPort;
 
   private BroadcastListener listener;
   private Broadcaster broadcaster;
@@ -90,7 +84,6 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
         Enumeration<InetAddress> nicIps = nic.getInetAddresses();
         while (nicIps.hasMoreElements()) {
           InetAddress nicIp = nicIps.nextElement();
-          byte[] b = nicIp.getAddress();
           int ipAsInt = addrToInt(nicIp);
           if (( ipAsInt & mask) == subnet) {
             return nicIp.getHostAddress();

@@ -100,8 +100,8 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     listener.shutdown();
   }
 
-  public boolean addMember(String hostName, int clusterPort) {
-    return addMember(new SocketClient(new InetSocketAddress(hostName, clusterPort)));
+  public boolean addMember(String hostIp, int clusterPort) {
+    return addMember(new SocketClient(new InetSocketAddress(hostIp, clusterPort)));
   }
 
   boolean addMember(SocketClient member) {
@@ -109,8 +109,8 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
       if (!clientMap.containsKey(member.getHostPort())) {
         ClusterMessage h = ClusterMessage.register(local.getHostPort(), true);
 
-        member.register(h);
         members.add(member);
+        member.register(h);
 
         clusterLogger.info("Discovered and added host {}", member.getHostPort());
         return true;
@@ -153,7 +153,8 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   private void setMemberOnline(String fullName, boolean online) throws IOException {
     synchronized (members) {
       clusterLogger.info("Cluster member [{}] online[{}]", fullName, online);
-      SocketClient member = clientMap.get(fullName);
+      SocketClient member = clientMap.computeIfAbsent(fullName,
+          key -> new SocketClient(parseFullName(key)));
       member.setOnline(online);
     }
   }

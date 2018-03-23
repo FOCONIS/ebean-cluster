@@ -47,6 +47,7 @@ public class ClusterMessage {
     this.register = false;
   }
 
+  @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     if (registerHost != null) {

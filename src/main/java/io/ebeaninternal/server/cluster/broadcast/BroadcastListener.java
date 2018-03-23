@@ -62,7 +62,7 @@ public class BroadcastListener implements Runnable {
       logger.trace("Not adding myself", member);
     } else if (members.add(member)) {
       logger.info("Adding clusterpartner {}", member);
-      scb.addMember(member.getHostName(), member.getClusterPort());
+      scb.addMember(member.getHostIp(), member.getClusterPort());
     } else {
       logger.trace("Clusterpartner {} already added", member);
     }
