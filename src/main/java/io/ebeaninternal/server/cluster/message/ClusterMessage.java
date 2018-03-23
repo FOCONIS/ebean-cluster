@@ -40,8 +40,8 @@ public class ClusterMessage {
   /**
    * Create a ping message.
    */
-  public static ClusterMessage ping() {
-    return new ClusterMessage(TYPE_PING, System.currentTimeMillis());
+  public static ClusterMessage ping(String registerHost) {
+    return new ClusterMessage(TYPE_PING, System.currentTimeMillis(), registerHost);
   }
 
   /**
@@ -67,25 +67,30 @@ public class ClusterMessage {
   /**
    * Create for ping & pong.
    */
-  private ClusterMessage(int type, long timestamp) {
+  private ClusterMessage(int type, long timestamp, String registerHost) {
     this.eventType = type;
     this.data = null;
-    this.registerHost = null;
+    this.registerHost = registerHost;
     this.timestamp = timestamp;
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    if (registerHost != null) {
-      sb.append("type ");
-      sb.append(eventType);
-      sb.append(" ");
-      sb.append(registerHost);
-    } else {
-      sb.append("transEvent ");
+    switch (eventType) {
+    case TYPE_TRANSACTION:
+      return "transEvent, payload: " + data.length + " bytes";
+    case TYPE_REGISTER:
+      return "register: " + registerHost;
+    case TYPE_UNREGISTER:
+      return "unregister: " + registerHost;
+    case TYPE_PING:
+      return "ping";
+    case TYPE_PONG:
+      return "pong";
+    default:
+      return "txpe " + eventType;
     }
-    return sb.toString();
+
   }
 
   /**
@@ -113,14 +118,14 @@ public class ClusterMessage {
    * Return true if register is true for a online/offline message.
    */
   public boolean isPing() {
-    return eventType == TYPE_REGISTER;
+    return eventType == TYPE_PING;
   }
 
   /**
    * Return true if register is true for a online/offline message.
    */
   public boolean isPong() {
-    return eventType == TYPE_REGISTER;
+    return eventType == TYPE_PONG;
   }
 
   /**
@@ -143,6 +148,7 @@ public class ClusterMessage {
       dataOutput.writeUTF(getRegisterHost());
     } else if (eventType == TYPE_PING || eventType == TYPE_PONG) {
       dataOutput.writeLong(timestamp);
+      dataOutput.writeUTF(getRegisterHost());
     }
     dataOutput.flush();
   }
@@ -151,7 +157,7 @@ public class ClusterMessage {
    * Read the message from binary form.
    */
   public static ClusterMessage read(DataInputStream dataInput) throws IOException {
-    int type = dataInput.read();
+    int type = dataInput.readInt();
     switch(type) {
       case TYPE_TRANSACTION:
         int length = dataInput.readInt();
@@ -164,14 +170,14 @@ public class ClusterMessage {
         return new ClusterMessage(host, type == TYPE_REGISTER);
       case TYPE_PING:
       case TYPE_PONG:
-        return new ClusterMessage(type, dataInput.readLong());
+        return new ClusterMessage(type, dataInput.readLong(), dataInput.readUTF());
       default:
         throw new UnsupportedOperationException("Unknown type: " + type);
     }
   }
 
-  public ClusterMessage getPong() {
-    return new ClusterMessage(TYPE_PONG, timestamp);
+  public ClusterMessage getPong(String host) {
+    return new ClusterMessage(TYPE_PONG, timestamp, host);
   }
 
   public long getTimestamp() {

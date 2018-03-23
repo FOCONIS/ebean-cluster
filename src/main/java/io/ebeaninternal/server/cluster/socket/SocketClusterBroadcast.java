@@ -182,7 +182,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   public void ping() {
     try {
       countOutgoing.incrementAndGet();
-      ClusterMessage msg = ClusterMessage.ping();
+      ClusterMessage msg = ClusterMessage.ping(getHostPort());
       broadcast(msg);
     } catch (Exception e) {
       logger.error("Error sending Ping to cluster members.", e);
@@ -218,9 +218,16 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
       logger.debug("RECV <- {}:{}; {}", request.getSourceAddress(), request.getSourcePort(), message);
 
       if (message.isPing()) {
-        SocketClient member = clientMap.get(request.getSourceAddress()+":"+request.getSourcePort());
-        member.send(message.getPong());
-      } if (message.isRegisterEvent()) {
+        SocketClient member = clientMap.get(message.getRegisterHost());
+        if (member != null) {
+          member.send(message.getPong(local.getHostPort()));
+        }
+      } else if (message.isPong()) {
+        SocketClient member = clientMap.get(message.getRegisterHost());
+        if (member != null) {
+          member.processPong(message);
+        }
+      } else if (message.isRegisterEvent()) {
         if (local.getHostPort().equals(message.getRegisterHost())) {
           clusterLogger.warn("Got invalid registerEvent for this host from {}:{}", request.getSourceAddress(), request.getSourcePort());
         } else {

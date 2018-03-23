@@ -36,6 +36,10 @@ class SocketClient {
 
   private DataOutputStream dataOutput;
 
+  private int pings;
+
+  private int pongs;
+
   /**
    * Construct with an IP address and port.
    */
@@ -131,6 +135,9 @@ class SocketClient {
     lock.lock();
     try {
       if (online) {
+        if (msg.isPing()) {
+          pings++;
+        }
         msg.write(dataOutput);
       }
     } finally {
@@ -159,6 +166,22 @@ class SocketClient {
     this.socket = s;
     this.os = socket.getOutputStream();
     this.dataOutput = new DataOutputStream(os);
+  }
+
+  /**
+   * @param message
+   */
+  public void processPong(ClusterMessage message) {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+     pongs++;
+     long latency = System.currentTimeMillis() - message.getTimestamp();
+     logger.trace("PING: sent {}, recv {}, latency {} ms", pings, pongs, latency);
+    } finally {
+      lock.unlock();
+    }
+
   }
 
 }
