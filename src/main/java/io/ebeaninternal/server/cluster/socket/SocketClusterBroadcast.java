@@ -110,7 +110,8 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
   boolean addMember(SocketClient member) {
     if (clientMap.putIfAbsent(member.getHostPort(), member) == null) {
-      ClusterMessage msg = ClusterMessage.register(member.getHostPort(), true);
+      // send register message back to the member. Use our address
+      ClusterMessage msg = ClusterMessage.register(local.getHostPort(), true);
       member.register(msg);
       clusterLogger.info("Discovered and added host {}", member.getHostPort());
       if (clusterLogger.isDebugEnabled()) {
