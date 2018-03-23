@@ -1,7 +1,7 @@
 package io.ebeaninternal.server.cluster.socket;
 
 import io.ebeaninternal.server.cluster.ClusterManager;
-import io.ebeaninternal.server.cluster.SocketConfig;
+import io.ebeaninternal.server.cluster.ClusterBroadcastConfig;
 import io.ebeaninternal.server.cluster.broadcast.BroadcastListener;
 import io.ebeaninternal.server.cluster.broadcast.BroadcastMessage;
 import io.ebeaninternal.server.cluster.broadcast.Broadcaster;
@@ -36,7 +36,7 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
   private Broadcaster broadcaster;
 
 
-  public SocketClusterAutoDiscoveryBroadcast(ClusterManager manager, SocketConfig config) {
+  public SocketClusterAutoDiscoveryBroadcast(ClusterManager manager, ClusterBroadcastConfig config) {
     super(manager, config);
     this.discoveryAddresss = parseFullName(config.getDiscoveryHostPort());
     this.discoveryInterval = config.getDiscoveryInterval();
@@ -46,7 +46,7 @@ public class SocketClusterAutoDiscoveryBroadcast extends SocketClusterBroadcast 
    * Tries to find the correct network interface.
    */
   @Override
-  protected SocketClient configureSocketClient(SocketConfig config) {
+  protected SocketClient configureSocketClient(ClusterBroadcastConfig config) {
     String localHostPort = config.getLocalHostPort();
     InetSocketAddress addr = parseFullName(localHostPort);
 

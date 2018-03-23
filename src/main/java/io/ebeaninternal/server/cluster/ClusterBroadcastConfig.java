@@ -32,7 +32,7 @@ import java.util.Properties;
  * </ul>
  *
  */
-public class SocketConfig {
+public class ClusterBroadcastConfig {
 
   /**
    * This local server in host:port format.
@@ -58,6 +58,16 @@ public class SocketConfig {
 
   private int discoveryInterval = 30000;
 
+  /**
+   * enables or disables the autodiscovery feature.
+   */
+  public void setAutoDiscovery(boolean isAutoDiscovery) {
+    this.isAutoDiscovery = isAutoDiscovery;
+  }
+
+  /**
+   * Returns <code>true</code> if AutoDiscovery is active.
+   */
   public boolean isAutoDiscovery() {
     return isAutoDiscovery;
   }

@@ -2,7 +2,7 @@ package io.ebeaninternal.server.cluster.socket;
 
 import io.ebeaninternal.server.cluster.ClusterBroadcast;
 import io.ebeaninternal.server.cluster.ClusterManager;
-import io.ebeaninternal.server.cluster.SocketConfig;
+import io.ebeaninternal.server.cluster.ClusterBroadcastConfig;
 import io.ebeaninternal.server.cluster.message.ClusterMessage;
 import io.ebeaninternal.server.cluster.message.MessageReadWrite;
 import io.ebeaninternal.server.transaction.RemoteTransactionEvent;
@@ -39,7 +39,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
   private final AtomicLong countIncoming = new AtomicLong();
 
-  public SocketClusterBroadcast(ClusterManager manager, SocketConfig config) {
+  public SocketClusterBroadcast(ClusterManager manager, ClusterBroadcastConfig config) {
 
     this.messageReadWrite = new MessageReadWrite(manager);
 
@@ -64,7 +64,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   /**
    * Returns the socket client with our IP
    */
-  protected SocketClient configureSocketClient(SocketConfig config) {
+  protected SocketClient configureSocketClient(ClusterBroadcastConfig config) {
     String localHostPort = config.getLocalHostPort();;
     return new SocketClient(parseFullName(localHostPort));
   }

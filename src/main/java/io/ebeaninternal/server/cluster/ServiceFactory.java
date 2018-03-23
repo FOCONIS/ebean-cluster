@@ -12,7 +12,7 @@ public class ServiceFactory implements ClusterBroadcastFactory {
   @Override
   public ClusterBroadcast create(ClusterManager manager, ContainerConfig containerConfig) {
 
-    SocketConfig config = new SocketConfig();
+    ClusterBroadcastConfig config = new ClusterBroadcastConfig();
     config.loadFromProperties(containerConfig.getProperties());
 
     if (config.isAutoDiscovery()) {

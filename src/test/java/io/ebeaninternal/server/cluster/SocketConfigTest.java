@@ -18,7 +18,7 @@ public class SocketConfigTest {
     properties.setProperty("ebean.cluster.members", "127.0.0.1:9901,127.0.0.1:9902; 127.0.0.1:9903 ;  127.0.0.1:9904 ");
     properties.setProperty("ebean.cluster.threadPoolName", "somePoolName");
 
-    SocketConfig config = new SocketConfig();
+    ClusterBroadcastConfig config = new ClusterBroadcastConfig();
     config.loadFromProperties(properties);
 
     assertEquals(config.getLocalHostPort(), "127.0.0.1:9898");
@@ -30,7 +30,7 @@ public class SocketConfigTest {
   @Test
   public void setters() {
 
-    SocketConfig config = new SocketConfig();
+    ClusterBroadcastConfig config = new ClusterBroadcastConfig();
     config.setThreadPoolName("somePoolName");
     config.setMembers(Arrays.asList("127.0.0.1:9901","127.0.0.1:9902","127.0.0.1:9903","127.0.0.1:9904"));
     config.setLocalHostPort("127.0.0.1:9898");
