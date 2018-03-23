@@ -2,6 +2,7 @@ package io.ebean.testdouble;
 
 import io.ebean.AutoTune;
 import io.ebean.BeanState;
+import io.ebean.DtoQuery;
 import io.ebean.ExpressionFactory;
 import io.ebean.PersistenceContextScope;
 import io.ebean.Query;
@@ -18,13 +19,18 @@ import io.ebean.config.dbplatform.DatabasePlatform;
 import io.ebean.event.readaudit.ReadAuditLogger;
 import io.ebean.event.readaudit.ReadAuditPrepare;
 import io.ebean.meta.MetaInfoManager;
+import io.ebean.meta.MetricVisitor;
 import io.ebeaninternal.api.LoadBeanRequest;
 import io.ebeaninternal.api.LoadManyRequest;
-import io.ebeaninternal.api.ScopeTrans;
+import io.ebeaninternal.api.SpiDtoQuery;
 import io.ebeaninternal.api.SpiEbeanServer;
+import io.ebeaninternal.api.SpiJsonContext;
 import io.ebeaninternal.api.SpiQuery;
 import io.ebeaninternal.api.SpiTransaction;
+import io.ebeaninternal.api.SpiTransactionManager;
 import io.ebeaninternal.api.TransactionEventTable;
+import io.ebeaninternal.dbmigration.ddlgeneration.DdlHandler;
+import io.ebeaninternal.server.core.SpiResultSet;
 import io.ebeaninternal.server.core.timezone.DataTimeZone;
 import io.ebeaninternal.server.deploy.BeanDescriptor;
 import io.ebeaninternal.server.query.CQuery;
@@ -33,6 +39,8 @@ import io.ebeaninternal.server.transaction.RemoteTransactionEvent;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 
 /**
@@ -142,20 +150,7 @@ public class TDSpiEbeanServer extends TDEbeanServer implements SpiEbeanServer {
 
   }
 
-  @Override
-  public SpiTransaction createServerTransaction(boolean isExplicit, int isolationLevel) {
-    return null;
-  }
 
-  @Override
-  public SpiTransaction getCurrentServerTransaction() {
-    return null;
-  }
-
-  @Override
-  public ScopeTrans createScopeTrans(TxScope txScope) {
-    return null;
-  }
 
   @Override
   public void remoteTransactionEvent(RemoteTransactionEvent event) {
@@ -172,10 +167,6 @@ public class TDSpiEbeanServer extends TDEbeanServer implements SpiEbeanServer {
     return null;
   }
 
-  @Override
-  public <T> int findRowCountWithCopy(Query<T> query, Transaction t) {
-    return 0;
-  }
 
   @Override
   public void loadBean(LoadBeanRequest loadRequest) {
@@ -255,6 +246,108 @@ public class TDSpiEbeanServer extends TDEbeanServer implements SpiEbeanServer {
   @Override
   public <T> T createEntityBean(Class<T> type) {
     return null;
+  }
+
+  @Override
+  public SpiJsonContext jsonExtended() {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public SpiTransactionManager getTransactionManager() {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public SpiTransaction beginServerTransaction() {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public SpiTransaction currentServerTransaction() {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public <T> int findCountWithCopy(Query<T> query, Transaction t) {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
+  @Override
+  public void slowQueryCheck(long executionTimeMicros, int rowCount, SpiQuery<?> query) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public DdlHandler createDdlHandler() {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public void scopedTransactionEnter(TxScope txScope) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public void scopedTransactionExit(Object returnOrThrowable, int opCode) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public <T> List<T> findDtoList(SpiDtoQuery<T> query) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public <T> T findDtoOne(SpiDtoQuery<T> query) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public <T> void findDtoEach(SpiDtoQuery<T> query, Consumer<T> consumer) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public <T> void findDtoEachWhile(SpiDtoQuery<T> query, Predicate<T> consumer) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public <D> DtoQuery<D> findDto(Class<D> dtoType, SpiQuery<?> ormQuery) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public SpiResultSet findResultSet(SpiQuery<?> ormQuery, SpiTransaction transaction) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public void visitMetrics(MetricVisitor visitor) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public boolean exists(Class<?> beanType, Object beanId, Transaction transaction) {
+    // TODO Auto-generated method stub
+    return false;
   }
 
 }
