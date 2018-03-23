@@ -27,7 +27,7 @@
     <appender-ref ref="STDOUT"/>
   </root>
 
-  <!--<logger name="com.avaje.ebeaninternal.server.cluster" level="TRACE"/>-->
+  <logger name="io.ebeaninternal.server.cluster" level="TRACE"/>
 
   <logger name="org.avaje.ebean.Cluster" level="TRACE"/>
 

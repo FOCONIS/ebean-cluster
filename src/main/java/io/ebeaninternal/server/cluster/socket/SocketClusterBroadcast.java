@@ -28,7 +28,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
   private static final Logger logger = LoggerFactory.getLogger(SocketClusterBroadcast.class);
 
-  private final SocketClient local;
+  protected final SocketClient local;
 
   private final Map<String, SocketClient> clientMap = new ConcurrentHashMap<>();
 
@@ -88,17 +88,23 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     return new SocketClusterStatus(currentGroupSize, txnIn, txnOut);
   }
 
+  @Override
   public void startup() {
     listener.startListening();
     register();
   }
 
+  @Override
   public void shutdown() {
     deregister();
     listener.shutdown();
   }
 
-  void addMember(SocketClient member) {
+  public boolean addMember(String hostName, int clusterPort) {
+    return addMember(new SocketClient(new InetSocketAddress(hostName, clusterPort)));
+  }
+
+  boolean addMember(SocketClient member) {
     synchronized (clientMap) {
       if (!clientMap.containsKey(member.getHostPort())) {
         ClusterMessage h = ClusterMessage.register(local.getHostPort(), true);
@@ -107,6 +113,9 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
         members.add(member);
 
         clusterLogger.info("Discovered and added host {}", member.getHostPort());
+        return true;
+      } else {
+        return false;
       }
     }
   }
@@ -152,6 +161,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
   /**
    * Send the payload to all the members of the cluster.
    */
+  @Override
   public void broadcast(RemoteTransactionEvent remoteTransEvent) {
     try {
       countOutgoing.incrementAndGet();

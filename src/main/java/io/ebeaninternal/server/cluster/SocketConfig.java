@@ -25,23 +25,32 @@ public class SocketConfig {
 
   private boolean isAutoDiscovery = false;
 
-  private String subDomain = "";
+  private String discoveryNet = "172.0.0.0/255.240.0.0";
 
-  private int clusterPort = 4499;
+  private String discoveryHostPort = "224.0.0.180:4446";
+
+  private String discoveryGroup = "ebean-default";
 
   public boolean isAutoDiscovery() {
     return isAutoDiscovery;
   }
 
-  public String getSubDomain() {
-    return subDomain;
+  /**
+   * @return the broadcastIp
+   */
+  public String getDiscoveryGroup() {
+    return discoveryGroup;
   }
 
-    public int getClusterPort() {
-        return clusterPort;
-    }
+  public String getDiscoveryHostPort() {
+    return discoveryHostPort;
+  }
 
-    /**
+  public String getDiscoveryNet() {
+    return discoveryNet;
+  }
+
+  /**
    * Return the host and port for this server instance.
    */
   public String getLocalHostPort() {
@@ -91,9 +100,12 @@ public class SocketConfig {
     this.properties = properties;
     this.threadPoolName = getProperty("ebean.cluster.threadPoolName", threadPoolName);
     this.localHostPort = getProperty("ebean.cluster.localHostPort", localHostPort);
+
     this.isAutoDiscovery = "auto".equals(getProperty("ebean.cluster.discovery", ""));
-    this.subDomain = getProperty("ebean.cluster.discovery.domain", "172");
-    this.clusterPort = Integer.parseInt(getProperty("ebean.cluster.discovery.port", "" + this.clusterPort));
+
+    this.discoveryGroup = getProperty("ebean.cluster.discovery.group", discoveryGroup);
+    this.discoveryNet = getProperty("ebean.cluster.discovery.net", discoveryNet);
+    this.discoveryHostPort = getProperty("ebean.cluster.discovery.hostPort", discoveryHostPort);
 
     if (!isAutoDiscovery) {
       String rawMembers = getProperty("ebean.cluster.members", "");
@@ -114,4 +126,5 @@ public class SocketConfig {
     value = properties.getProperty(key, defaultValue);
     return (value == null) ? defaultValue : value.trim();
   }
+
 }
