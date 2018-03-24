@@ -5,30 +5,31 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InvalidObjectException;
 import java.io.Serializable;
-import java.util.Objects;
+import java.io.StreamCorruptedException;
+import java.util.UUID;
 
 /**
- * A broadcast message is sent periodically to a given broadcast IP.
+ * A broadcast message is sent periodically
  *
- * it contains hostGroup, hostName and hostPort of the member.
+ * it contains hostGroup, host UUID and hostPort of the member.
  * Only members of the same hostGroup will be added.
- *
+ * UUID is required to check if this is our own packet.
  * @author Roland Praml, FOCONIS AG
  *
  */
 public class BroadcastMessage implements Serializable {
 
-  private static final long serialVersionUID = 8861907251314300963L;
+  private static final long serialVersionUID = 2684684366359766679L;
 
   private final String discoveryGroup;
-  private final String hostIp;
+  private final UUID hostUuid;
   private final int clusterPort;
 
-  public BroadcastMessage(String discoveryGroup, String hostName, int hostPort) {
+
+  public BroadcastMessage(String discoveryGroup, UUID hostUuid, int hostPort) {
     this.discoveryGroup = discoveryGroup;
-    this.hostIp = hostName;
+    this.hostUuid = hostUuid;
     this.clusterPort = hostPort;
   }
 
@@ -38,10 +39,10 @@ public class BroadcastMessage implements Serializable {
   public BroadcastMessage(byte[] rawMessage) throws IOException {
     try ( DataInputStream in = new DataInputStream(new ByteArrayInputStream(rawMessage))) {
       if (in.readLong() != serialVersionUID) {
-        throw new InvalidObjectException("magic number does not match");
+        throw new StreamCorruptedException("magic number does not match");
       }
       discoveryGroup = in.readUTF();
-      hostIp = in.readUTF();
+      hostUuid = new UUID(in.readLong(), in.readLong());
       clusterPort = in.readInt();
     }
   }
@@ -54,7 +55,8 @@ public class BroadcastMessage implements Serializable {
     try (  DataOutputStream out = new DataOutputStream(baos)) {
       out.writeLong(serialVersionUID);
       out.writeUTF(discoveryGroup);
-      out.writeUTF(hostIp);
+      out.writeLong(hostUuid.getMostSignificantBits());
+      out.writeLong(hostUuid.getLeastSignificantBits());
       out.writeInt(clusterPort);
     } catch (IOException e) {}
 
@@ -65,39 +67,19 @@ public class BroadcastMessage implements Serializable {
     return discoveryGroup;
   }
 
-  public String getHostIp() {
-    return hostIp;
-  }
-
   public int getClusterPort() {
     return clusterPort;
+  }
+
+  public UUID getHostUuid() {
+    return hostUuid;
   }
 
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append(discoveryGroup).append('@');
-    sb.append(hostIp).append(':').append(clusterPort);
+    sb.append(hostUuid).append(':').append(clusterPort);
     return sb.toString();
   }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(discoveryGroup, hostIp) + clusterPort;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    } else if (obj instanceof BroadcastMessage) {
-      BroadcastMessage other = (BroadcastMessage)obj;
-      return other.clusterPort == clusterPort
-          && Objects.equals(other.discoveryGroup, discoveryGroup)
-          && Objects.equals(other.hostIp, hostIp);
-    } else  {
-      return false;
-    }
-  }
-
 }

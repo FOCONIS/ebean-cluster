@@ -1,16 +1,20 @@
 package io.ebeaninternal.server.cluster.socket;
 
 import io.ebeaninternal.server.cluster.message.ClusterMessage;
+import io.ebeaninternal.server.cluster.message.ClusterMessage.Type;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.Socket;
+import java.util.Enumeration;
 import java.util.concurrent.locks.ReentrantLock;
-
 
 /**
  * The client side of the socket clustering.
@@ -22,6 +26,13 @@ class SocketClient {
   private final InetSocketAddress address;
 
   private final String hostPort;
+
+  private final boolean local;
+
+  /**
+   * The local port where we expect the response.
+   */
+  private final int localPort;
 
   /**
    * lock guarding all access
@@ -40,26 +51,27 @@ class SocketClient {
 
   private int pongs;
 
+
+
+
   /**
    * Construct with an IP address and port.
    */
-  SocketClient(InetSocketAddress address) {
+  SocketClient(InetSocketAddress address, int localPort) {
     this.lock = new ReentrantLock(false);
     this.address = address;
     this.hostPort = address.getAddress().getHostAddress() + ":" + address.getPort();
+    this.localPort = localPort;
+    this.local = address.getPort() == localPort && ownAddress();
+  }
+
+  public String xgetHostPort() {
+    return hostPort;
   }
 
   @Override
   public String toString() {
     return hostPort;
-  }
-
-  String getHostPort() {
-    return hostPort;
-  }
-
-  int getPort() {
-    return address.getPort();
   }
 
   boolean isOnline() {
@@ -91,7 +103,6 @@ class SocketClient {
     }
   }
 
-
   void disconnect() {
     final ReentrantLock lock = this.lock;
     lock.lock();
@@ -101,7 +112,8 @@ class SocketClient {
         try {
           socket.close();
         } catch (IOException e) {
-          logger.info("Error disconnecting from Cluster member {}", hostPort, e);
+          logger.info("Error disconnecting from Cluster member {}:{}",
+              address.getAddress().getHostAddress(), address.getPort(), e);
         }
         os = null;
         dataOutput = null;
@@ -112,13 +124,13 @@ class SocketClient {
     }
   }
 
-  boolean register(ClusterMessage registerMsg) {
+  boolean register() {
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {
       try {
         setOnline();
-        send(registerMsg);
+        send(ClusterMessage.register(localPort));
         return true;
       } catch (IOException e) {
         disconnect();
@@ -135,7 +147,7 @@ class SocketClient {
     lock.lock();
     try {
       if (online) {
-        if (msg.isPing()) {
+        if (msg.getType() == Type.PING) {
           pings++;
         }
         msg.write(dataOutput);
@@ -175,13 +187,48 @@ class SocketClient {
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {
-     pongs++;
-     long latency = System.currentTimeMillis() - message.getTimestamp();
-     logger.trace("PING: sent {}, recv {}, latency {} ms", pings, pongs, latency);
+      pongs++;
+      long latency = System.currentTimeMillis() - message.getTimestamp();
+      logger.trace("PING: sent {}, recv {}, latency {} ms", pings, pongs, latency);
     } finally {
       lock.unlock();
     }
 
+  }
+
+  private boolean ownAddress() {
+    try {
+      Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
+      while (nics.hasMoreElements()) {
+        NetworkInterface nic = nics.nextElement();
+        if (!nic.isLoopback() && !nic.isVirtual()) {
+          Enumeration<InetAddress> addresses = nic.getInetAddresses();
+          while (addresses.hasMoreElements()){
+              InetAddress ip = addresses.nextElement();
+              if (ip.equals(address.getAddress())) {
+                return true;
+              }
+          }
+        }
+      }
+    } catch (IOException e) {
+      logger.error("Error while iterating over IP addresses");
+    }
+    return false;
+  }
+
+  /**
+   * Checks if this is our local address.
+   */
+  public boolean isLocal() {
+    return local;
+  }
+
+  /**
+   * Returns the port of this client.
+   */
+  public int getPort() {
+    return address.getPort();
   }
 
 }

@@ -8,21 +8,22 @@ import java.util.Properties;
  * Configuration for clustering using TCP sockets.
  *
  * <ul>
- * <li><code>ebean.cluster.localHostPort</code> (e.g.
- * <code>127.0.0.1:9942</code>) the local interface we bind to. If
- * auto-discovery is enabled, the IP is ignored, only the port is used</li>
+ * <li><code>ebean.cluster.port</code> The TCP port to use for cluster messages.
+ * 0 means a random value between <code>ebean.cluster.port</code> and
+ * <code>ebean.cluster.port</code> is used. (default)</li>
+ *
+ * <li><code>ebean.cluster.bindAddr</code> The bind address for incoming TCP
+ * cluster messages.</li>
+ *
+ * <li><code>ebean.cluster.members</code> A comma separated list of cluster
+ * members.</li>
  *
  * <li><code>ebean.cluster.discovery.enabled</code> (Default: false) controls,
  * if auto-discovery is enabled.</li>
  *
- * <li><code>ebean.cluster.discovery.net</code> (e.g. 172.0.0.0/12, default is
- * 'autodetect') The network, where auto discovery runs. The ClusterManager
- * tries to auto detect the interface. If 'autodetect', the first active
- * interface is taken.</li>
- *
- * <li><code>ebean.cluster.discovery.hostPort</code> (Default: 224.0.0.180:4446)
- * The Multicast address that is used to communicate with other instances. The
- * address must be the same on all instances</li>
+ * <li><code>ebean.cluster.discovery.multicast</code> (Default:
+ * 224.0.0.180:4446) The Multicast address that is used to communicate with
+ * other instances. The address must be the same on all instances</li>
  *
  * <li><code>ebean.cluster.discovery.group</code> (Default: ebean-default) The
  * multicast group name. The group must be the same on all instances</li>
@@ -35,10 +36,15 @@ import java.util.Properties;
  */
 public class ClusterBroadcastConfig {
 
-  /**
-   * This local server in host:port format.
-   */
-  private String localHostPort = "";
+
+  private int port = 0;
+
+  private String bindAddr = "0.0.0.0";
+
+  private int portLow = 50000;
+  private int portHigh = 60000;
+
+  private String multicast = "224.0.0.180:4446";
 
   /**
    * All the cluster members in host:port format.
@@ -50,10 +56,6 @@ public class ClusterBroadcastConfig {
   private Properties properties;
 
   private boolean isAutoDiscovery = false;
-
-  private String discoveryNet = "autodetect";
-
-  private String discoveryHostPort = "224.0.0.180:4446";
 
   private String discoveryGroup = "ebean-default";
 
@@ -88,31 +90,17 @@ public class ClusterBroadcastConfig {
   }
 
   /**
-   * Sets the discovery host and port (MCast addres). E.g 224.0.0.180:4446
+   * Sets the multicast host and port for UDP broadcasts. E.g 224.0.0.180:4446
    */
-  public void setDiscoveryHostPort(String discoveryHostPort) {
-    this.discoveryHostPort = discoveryHostPort;
+  public void setMulticast(String multicast) {
+    this.multicast = multicast;
   }
 
   /**
-   * Returns the discovery host and port
+   * @return the multicast
    */
-  public String getDiscoveryHostPort() {
-    return discoveryHostPort;
-  }
-
-  /**
-   * Sets the discovery network (ip with netmask). All cluster partner must be on the same subnet.
-   */
-  public void setDiscoveryNet(String discoveryNet) {
-    this.discoveryNet = discoveryNet;
-  }
-
-  /**
-   * Returns the discovery net.
-   */
-  public String getDiscoveryNet() {
-    return discoveryNet;
+  public String getMulticast() {
+    return multicast;
   }
 
   /**
@@ -130,17 +118,47 @@ public class ClusterBroadcastConfig {
   }
 
   /**
-   * Return the host and port for this server instance.
+   * returns the bind address.
    */
-  public String getLocalHostPort() {
-    return localHostPort;
+  public String getBindAddr() {
+    return bindAddr;
   }
 
   /**
-   * Set the host and port for this server instance.
+   * Sets the bind address.
    */
-  public void setLocalHostPort(String localHostPort) {
-    this.localHostPort = localHostPort;
+  public void setBindAddr(String bindAddr) {
+    this.bindAddr = bindAddr;
+  }
+
+  /**
+   * Return the host and port for this server instance.
+   */
+  public int getPort() {
+    return port;
+  }
+
+  /**
+   * Set the TCP port for this server instance.
+   */
+  public void setPort(int port) {
+    this.port = port;
+  }
+
+  public int getPortLow() {
+    return portLow;
+  }
+
+  public void setPortLow(int portLow) {
+    this.portLow = portLow;
+  }
+
+  public int getPortHigh() {
+    return portHigh;
+  }
+
+  public void setPortHigh(int portHigh) {
+    this.portHigh = portHigh;
   }
 
   /**
@@ -178,14 +196,15 @@ public class ClusterBroadcastConfig {
 
     this.properties = properties;
     this.threadPoolName = getProperty("ebean.cluster.threadPoolName", threadPoolName);
-    this.localHostPort = getProperty("ebean.cluster.localHostPort", localHostPort);
+    this.bindAddr = getProperty("ebean.cluster.bindAddr", bindAddr);
+    this.port = getProperty("ebean.cluster.port", port);
+    this.portLow = getProperty("ebean.cluster.port.low", portLow);
+    this.portHigh = getProperty("ebean.cluster.port.high", portHigh);
 
     this.isAutoDiscovery = "true".equals(getProperty("ebean.cluster.discovery.enabled", String.valueOf(isAutoDiscovery)));
-
     this.discoveryGroup = getProperty("ebean.cluster.discovery.group", discoveryGroup);
-    this.discoveryNet = getProperty("ebean.cluster.discovery.net", discoveryNet);
-    this.discoveryHostPort = getProperty("ebean.cluster.discovery.hostPort", discoveryHostPort);
-    this.discoveryInterval = Integer.parseInt(getProperty("ebean.cluster.discovery.interval", String.valueOf(discoveryInterval)));
+    this.multicast = getProperty("ebean.cluster.discovery.multicast", multicast);
+    this.discoveryInterval = getProperty("ebean.cluster.discovery.interval", discoveryInterval);
 
     // add static members (also when discovery is active)
     String rawMembers = getProperty("ebean.cluster.members", "");
@@ -207,4 +226,12 @@ public class ClusterBroadcastConfig {
     return (value == null) ? defaultValue : value.trim();
   }
 
+  private int getProperty(String key, int defaultValue) {
+    String value = properties.getProperty(key.toLowerCase());
+    if (value != null) {
+      return Integer.parseInt(value.trim());
+    }
+    value = properties.getProperty(key, String.valueOf(defaultValue));
+    return (value == null) ? defaultValue : Integer.parseInt(value.trim());
+  }
 }

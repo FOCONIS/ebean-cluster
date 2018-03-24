@@ -45,6 +45,7 @@ public class TestBroadcaster {
     ContainerConfig containerConfig = new ContainerConfig();
     Properties properties = new Properties();
     properties.put("ebean.cluster.discovery.enabled", "true");
+    properties.put("ebean.cluster.discovery.interval", "5000");
     //properties.put("ebean.cluster.discovery.net", "10.75.1.0/24");
     containerConfig.setProperties(properties);
     ClusterManager manager = new ClusterManager(containerConfig );

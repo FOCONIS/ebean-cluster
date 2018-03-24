@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -60,16 +61,17 @@ class SocketClusterListener implements Runnable {
   /**
    * Construct with a given thread pool name.
    */
-  public SocketClusterListener(SocketClusterBroadcast owner, int port, String poolName) {
+  public SocketClusterListener(SocketClusterBroadcast owner, SocketAddress bindAddr, String poolName) {
     this.owner = owner;
     this.service = Executors.newCachedThreadPool(new DaemonThreadFactory(poolName));
     try {
-      this.serverListenSocket = new ServerSocket(port);
+      this.serverListenSocket = new ServerSocket();
+      this.serverListenSocket.bind(bindAddr);
       this.serverListenSocket.setSoTimeout(60000);
       this.listenerThread = new Thread(this, "EbeanClusterListener");
 
     } catch (IOException e) {
-      String msg = "Error starting cluster socket listener on port " + port;
+      String msg = "Error starting cluster socket listener on " + bindAddr;
       throw new RuntimeException(msg, e);
     }
   }

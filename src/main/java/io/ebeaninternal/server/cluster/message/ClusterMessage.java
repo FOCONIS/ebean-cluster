@@ -8,16 +8,13 @@ import java.io.IOException;
  * The message broadcast around the cluster.
  */
 public class ClusterMessage {
+  public enum Type {
+    TRANSACTION, REGISTER, DEREGISTER, PING, PONG
+  }
 
-  private static final int TYPE_TRANSACTION = 0;
-  private static final int TYPE_REGISTER = 1;
-  private static final int TYPE_UNREGISTER = 2;
-  private static final int TYPE_PING = 3;
-  private static final int TYPE_PONG = 4;
+  private final Type type;
 
-  private final int eventType;
-
-  private final String registerHost;
+  private final int port;
 
   private final byte[] data;
 
@@ -26,8 +23,14 @@ public class ClusterMessage {
   /**
    * Create a register message.
    */
-  public static ClusterMessage register(String registerHost, boolean register) {
-    return new ClusterMessage(registerHost, register);
+  public static ClusterMessage register(int port) {
+    return new ClusterMessage(Type.REGISTER, port);
+  }
+  /**
+   * Create a deregister message.
+   */
+  public static ClusterMessage deregister(int port) {
+    return new ClusterMessage(Type.DEREGISTER, port);
   }
 
   /**
@@ -40,99 +43,72 @@ public class ClusterMessage {
   /**
    * Create a ping message.
    */
-  public static ClusterMessage ping(String registerHost) {
-    return new ClusterMessage(TYPE_PING, System.currentTimeMillis(), registerHost);
+  public static ClusterMessage ping(int port) {
+    return new ClusterMessage(Type.PING, port, System.currentTimeMillis());
   }
 
   /**
    * Create for register online/offline message.
    */
-  private ClusterMessage(String registerHost, boolean register) {
-    this.registerHost = registerHost;
-    this.eventType = register ? TYPE_REGISTER : TYPE_UNREGISTER;
+  private ClusterMessage(Type eventType, int port) {
+    this.type = eventType;
     this.data = null;
     this.timestamp = 0;
+    this.port = port;
   }
 
   /**
    * Create for a transaction message.
    */
   private ClusterMessage(byte[] data) {
-    this.eventType = TYPE_TRANSACTION;
+    this.type = Type.TRANSACTION;
     this.data = data;
-    this.registerHost = null;
+    this.port = 0;
     this.timestamp = 0;
   }
 
   /**
    * Create for ping & pong.
    */
-  private ClusterMessage(int type, long timestamp, String registerHost) {
-    this.eventType = type;
+  private ClusterMessage(Type type, int port, long timestamp) {
+    this.type = type;
     this.data = null;
-    this.registerHost = registerHost;
+    this.port = port;
     this.timestamp = timestamp;
   }
 
   @Override
   public String toString() {
-    switch (eventType) {
-    case TYPE_TRANSACTION:
+    switch (type) {
+    case TRANSACTION:
       return "transEvent, payload: " + data.length + " bytes";
-    case TYPE_REGISTER:
-      return "register: " + registerHost;
-    case TYPE_UNREGISTER:
-      return "unregister: " + registerHost;
-    case TYPE_PING:
+    case REGISTER:
+      return "register";
+    case DEREGISTER:
+      return "deregister";
+    case PING:
       return "ping";
-    case TYPE_PONG:
+    case PONG:
       return "pong";
     default:
-      return "txpe " + eventType;
+      return "txpe " + type;
     }
-
   }
 
-  /**
-   * Return true if this is a register event as opposed to a transaction message.
-   */
-  public boolean isRegisterEvent() {
-    return eventType == TYPE_REGISTER || eventType == TYPE_UNREGISTER;
+  public Type getType() {
+    return type;
   }
 
-  /**
-   * Return the register host for online/offline message.
-   */
-  public String getRegisterHost() {
-    return registerHost;
+  public int getPort() {
+    return port;
   }
 
-  /**
-   * Return true if register is true for a online/offline message.
-   */
-  public boolean isRegister() {
-    return eventType == TYPE_REGISTER;
-  }
-
-  /**
-   * Return true if register is true for a online/offline message.
-   */
-  public boolean isPing() {
-    return eventType == TYPE_PING;
-  }
-
-  /**
-   * Return true if register is true for a online/offline message.
-   */
-  public boolean isPong() {
-    return eventType == TYPE_PONG;
-  }
-
-  /**
-   * Return the raw message data.
-   */
   public byte[] getData() {
     return data;
+  }
+
+  long getRTT() {
+    return System.currentTimeMillis() - timestamp;
   }
 
   /**
@@ -140,15 +116,15 @@ public class ClusterMessage {
    */
   public void write(DataOutputStream dataOutput) throws IOException {
 
-    dataOutput.writeInt(eventType);
-    if (eventType == TYPE_TRANSACTION) {
+    dataOutput.writeInt(type.ordinal());
+    if (type == Type.TRANSACTION) {
       dataOutput.writeInt(data.length);
       dataOutput.write(data);
-    } else if (isRegisterEvent()){
-      dataOutput.writeUTF(getRegisterHost());
-    } else if (eventType == TYPE_PING || eventType == TYPE_PONG) {
-      dataOutput.writeLong(timestamp);
-      dataOutput.writeUTF(getRegisterHost());
+    } else {
+      dataOutput.writeInt(port);
+      if (type == Type.PING || type == Type.PONG) {
+        dataOutput.writeLong(timestamp);
+      }
     }
     dataOutput.flush();
   }
@@ -157,27 +133,26 @@ public class ClusterMessage {
    * Read the message from binary form.
    */
   public static ClusterMessage read(DataInputStream dataInput) throws IOException {
-    int type = dataInput.readInt();
+    Type type = Type.values()[dataInput.readInt()];
     switch(type) {
-      case TYPE_TRANSACTION:
+      case TRANSACTION:
         int length = dataInput.readInt();
         byte[] data = new byte[length];
         dataInput.readFully(data);
         return new ClusterMessage(data);
-      case TYPE_REGISTER:
-      case TYPE_UNREGISTER:
-        String host = dataInput.readUTF();
-        return new ClusterMessage(host, type == TYPE_REGISTER);
-      case TYPE_PING:
-      case TYPE_PONG:
-        return new ClusterMessage(type, dataInput.readLong(), dataInput.readUTF());
+      case REGISTER:
+      case DEREGISTER:
+        return new ClusterMessage(type, dataInput.readInt());
+      case PING:
+      case PONG:
+        return new ClusterMessage(type, dataInput.readInt(), dataInput.readLong());
       default:
         throw new UnsupportedOperationException("Unknown type: " + type);
     }
   }
 
-  public ClusterMessage getPong(String host) {
-    return new ClusterMessage(TYPE_PONG, timestamp, host);
+  public ClusterMessage pong(int port) {
+    return new ClusterMessage(Type.PONG, port, timestamp);
   }
 
   public long getTimestamp() {

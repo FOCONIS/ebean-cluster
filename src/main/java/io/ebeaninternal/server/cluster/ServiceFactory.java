@@ -20,19 +20,21 @@ public class ServiceFactory implements ClusterBroadcastFactory {
     if (config.isAutoDiscovery()) {
       int i = 0;
       RuntimeException error = null;
-      while(i++ < 5) {
-        if (config.getLocalHostPort().isEmpty()) {
-          config.setLocalHostPort(":"+(int)(Math.random()*1000 + 50000));
+      while (i++ < 5) {
+        if (config.getPort() == 0) {
+          int randomPort = config.getPortHigh() - config.getPortLow();
+          randomPort = (int) (Math.random() * randomPort);
+          randomPort += config.getPortLow();
+          config.setPort(randomPort);
         }
-
         try {
           return new SocketClusterAutoDiscoveryBroadcast(manager, config);
         } catch (RuntimeException e) {
           error = e;
           if (e.getCause() instanceof BindException) {
-            config.setLocalHostPort("");
-            SocketClusterBroadcast.clusterLogger.warn("Address {} already in use. Trying to use a random one",
-                config.getLocalHostPort());
+            SocketClusterBroadcast.clusterLogger.warn("Port {} already in use. Trying to use a random one",
+                config.getPort());
+            config.setPort(0);
           } else {
             break;
           }
