@@ -22,7 +22,7 @@
     <dependency>
       <groupId>io.ebean</groupId>
       <artifactId>ebean</artifactId>
-      <version>10.1.1</version>
+      <version>11.15.1</version>
       <scope>provided</scope>
     </dependency>
 
@@ -43,9 +43,17 @@
     <dependency>
       <groupId>io.ebean</groupId>
       <artifactId>ebean-mocker</artifactId>
-      <version>10.1.1</version>
+      <version>11.15.1-FOC1</version>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.2.3</version>
+      <scope>test</scope>
+    </dependency>
+
 
   </dependencies>
 
@@ -59,7 +67,7 @@
         <extensions>true</extensions>
         <configuration>
           <tiles>
-            <tile>io.ebean.tile:enhancement:2.1</tile>
+            <tile>io.ebean.tile:enhancement:5.4</tile>
           </tiles>
         </configuration>
       </plugin>

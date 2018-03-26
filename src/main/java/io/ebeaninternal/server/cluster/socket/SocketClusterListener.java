@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -26,7 +27,7 @@ import java.util.concurrent.Executors;
  * ServerSocket.
  * </p>
  */
-class SocketClusterListener implements Runnable {
+class SocketClusterListener {
 
   private static final Logger logger = LoggerFactory.getLogger(SocketClusterListener.class);
 
@@ -60,18 +61,15 @@ class SocketClusterListener implements Runnable {
   /**
    * Construct with a given thread pool name.
    */
-  public SocketClusterListener(SocketClusterBroadcast owner, int port, String poolName) {
+  public SocketClusterListener(SocketClusterBroadcast owner, SocketAddress bindAddr, String poolName) throws IOException {
     this.owner = owner;
-    this.service = Executors.newCachedThreadPool(new DaemonThreadFactory(poolName));
-    try {
-      this.serverListenSocket = new ServerSocket(port);
-      this.serverListenSocket.setSoTimeout(60000);
-      this.listenerThread = new Thread(this, "EbeanClusterListener");
+    // first try to create serverSocket, to see if port is already used.
+    this.serverListenSocket = new ServerSocket();
+    this.serverListenSocket.bind(bindAddr);
+    this.serverListenSocket.setSoTimeout(60000);
 
-    } catch (IOException e) {
-      String msg = "Error starting cluster socket listener on port " + port;
-      throw new RuntimeException(msg, e);
-    }
+    this.service = Executors.newCachedThreadPool(new DaemonThreadFactory(poolName));
+    this.listenerThread = new Thread(this::listenerTask, "EbeanClusterListener");
   }
 
   /**
@@ -111,7 +109,7 @@ class SocketClusterListener implements Runnable {
    * This is a runnable and so this must be public. Don't call this externally
    * but rather call the startListening() method.
    */
-  public void run() {
+  private void listenerTask() {
     // run in loop until doingShutdown is true...
     while (!doingShutdown) {
       try {
@@ -141,5 +139,4 @@ class SocketClusterListener implements Runnable {
       }
     }
   }
-
 }

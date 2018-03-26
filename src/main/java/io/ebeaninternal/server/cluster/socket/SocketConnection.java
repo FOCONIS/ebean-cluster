@@ -58,4 +58,13 @@ class SocketConnection {
     return ois;
   }
 
+  public String getSourceAddress() {
+    return socket.getInetAddress().getHostAddress();
+  }
+
+  public int getSourcePort() {
+    return socket.getPort();
+  }
+
+
 }

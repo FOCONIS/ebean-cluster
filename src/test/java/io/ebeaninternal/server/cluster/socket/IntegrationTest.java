@@ -4,11 +4,12 @@ package io.ebeaninternal.server.cluster.socket;
 import io.ebean.AccessEbeanServerFactory;
 import io.ebean.EbeanServer;
 import io.ebean.SqlUpdate;
-import io.ebean.common.SpiContainer;
 import io.ebean.config.ContainerConfig;
 import io.ebean.config.ServerConfig;
 import io.ebean.event.AbstractBeanPersistListener;
 import io.ebean.event.BeanPersistListener;
+import io.ebean.service.SpiContainer;
+
 import org.example.domain.Customer;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
@@ -60,7 +61,7 @@ public class IntegrationTest {
   private ContainerConfig createContainerConfig(String local, String threadPoolName) {
 
     ContainerConfig container = new ContainerConfig();
-    container.setClusterActive(true);
+    container.setActive(true);
     Properties properties = new Properties();
     properties.setProperty("ebean.cluster.threadPoolName", threadPoolName);
     properties.setProperty("ebean.cluster.localHostPort", local);

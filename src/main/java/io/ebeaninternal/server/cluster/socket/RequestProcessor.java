@@ -21,7 +21,7 @@ class RequestProcessor implements Runnable {
 
   private final SocketClusterBroadcast owner;
 
-  private final String hostPort;
+  //private final String hostPort;
 
   /**
    * Create including the Listener (used to lookup the Request Handler) and
@@ -30,7 +30,7 @@ class RequestProcessor implements Runnable {
   public RequestProcessor(SocketClusterBroadcast owner, Socket clientSocket) {
     this.clientSocket = clientSocket;
     this.owner = owner;
-    this.hostPort = owner.getHostPort();
+    //this.hostPort = owner.xgetHostPort();
   }
 
   /**
@@ -39,6 +39,7 @@ class RequestProcessor implements Runnable {
    * <P>Dev Note: the command parsing is processed here so that it is preformed
    * by the assigned thread rather than the listeners thread.</P>
    */
+  @Override
   public void run() {
     try {
       logger.trace("start listening for cluster messages");
@@ -49,11 +50,11 @@ class RequestProcessor implements Runnable {
           break;
         }
       }
-      logger.trace("disconnecting: {}", hostPort);
+      logger.trace("disconnecting: {}", clientSocket);
       sc.disconnect();
 
     } catch (Exception e) {
-      logger.error("Error listening for messages - " + owner.getHostPort(), e);
+      logger.error("Error listening for messages", e);
     }
   }
 
