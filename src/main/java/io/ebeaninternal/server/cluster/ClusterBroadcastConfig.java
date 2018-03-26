@@ -9,8 +9,8 @@ import java.util.Properties;
  *
  * <ul>
  * <li><code>ebean.cluster.port</code> The TCP port to use for cluster messages.
- * 0 means a random value between <code>ebean.cluster.port</code> and
- * <code>ebean.cluster.port</code> is used. (default)</li>
+ * 0 means a random value between <code>ebean.cluster.portLow</code> and
+ * <code>ebean.cluster.portHigh</code> is used. (default)</li>
  *
  * <li><code>ebean.cluster.bindAddr</code> The bind address for incoming TCP
  * cluster messages.</li>
@@ -18,8 +18,9 @@ import java.util.Properties;
  * <li><code>ebean.cluster.members</code> A comma separated list of cluster
  * members.</li>
  *
- * <li><code>ebean.cluster.discovery.enabled</code> (Default: false) controls,
- * if auto-discovery is enabled.</li>
+ * <li><code>ebean.cluster.discovery.mode</code> (Default: static, possible
+ * values off,static,autodiscovery) controls, if cluster transport and
+ * auto-discovery is enabled.</li>
  *
  * <li><code>ebean.cluster.discovery.multicast</code> (Default:
  * 224.0.0.180:4446) The Multicast address that is used to communicate with
@@ -36,15 +37,42 @@ import java.util.Properties;
  */
 public class ClusterBroadcastConfig {
 
+  public enum Mode {
+    /**
+     * The cluster transport is off. No listeners are started,
+     */
+    OFF,
 
-  private int port = 0;
+    /**
+     * The cluster transport is in static mode. All members must be specified or added manually.
+     */
+    STATIC,
 
+    /**
+     * The cluster transport is in auto discovery mode. You can also add static members or add them manually.
+     */
+    AUTODISCOVERY
+  }
+
+  /**
+   * The bind addres, where to listen for incoming packets.
+   */
   private String bindAddr = "0.0.0.0";
 
+  /**
+   * The TCP/IP port to listen for incoming cluster messages.
+   */
+  private int port = 0;
+
+  // port range for random ports
   private int portLow = 50000;
   private int portHigh = 60000;
 
   private String multicast = "224.0.0.180:4446";
+
+  private String discoveryGroup = "ebean-default";
+
+  private int discoveryInterval = 30000;
 
   /**
    * All the cluster members in host:port format.
@@ -55,24 +83,20 @@ public class ClusterBroadcastConfig {
 
   private Properties properties;
 
-  private boolean isAutoDiscovery = false;
-
-  private String discoveryGroup = "ebean-default";
-
-  private int discoveryInterval = 30000;
+  private Mode mode = Mode.STATIC;
 
   /**
    * enables or disables the autodiscovery feature.
    */
-  public void setAutoDiscovery(boolean isAutoDiscovery) {
-    this.isAutoDiscovery = isAutoDiscovery;
+  public void setMode(Mode mode) {
+    this.mode = mode;
   }
 
   /**
    * Returns <code>true</code> if AutoDiscovery is active.
    */
-  public boolean isAutoDiscovery() {
-    return isAutoDiscovery;
+  public Mode getMode() {
+    return mode;
   }
 
   /**
@@ -201,17 +225,18 @@ public class ClusterBroadcastConfig {
     this.portLow = getProperty("ebean.cluster.port.low", portLow);
     this.portHigh = getProperty("ebean.cluster.port.high", portHigh);
 
-    this.isAutoDiscovery = "true".equals(getProperty("ebean.cluster.discovery.enabled", String.valueOf(isAutoDiscovery)));
+    this.mode = Mode.valueOf(getProperty("ebean.cluster.mode", mode.name()).toUpperCase());
+
     this.discoveryGroup = getProperty("ebean.cluster.discovery.group", discoveryGroup);
     this.multicast = getProperty("ebean.cluster.discovery.multicast", multicast);
     this.discoveryInterval = getProperty("ebean.cluster.discovery.interval", discoveryInterval);
 
     // add static members (also when discovery is active)
     String rawMembers = getProperty("ebean.cluster.members", "");
-    String[] split = rawMembers.split("[,;]");
+    String[] split = rawMembers.split("[,;]+");
     for (String rawMember : split) {
-      if (!rawMember.trim().isEmpty()) {
-        members.add(rawMember.trim());
+      if (!rawMember.isEmpty()) {
+        members.add(rawMember);
       }
     }
 

@@ -18,8 +18,6 @@ public class ClusterMessage {
 
   private final byte[] data;
 
-  private final long timestamp;
-
   /**
    * Create a register message.
    */
@@ -44,16 +42,22 @@ public class ClusterMessage {
    * Create a ping message.
    */
   public static ClusterMessage ping(int port) {
-    return new ClusterMessage(Type.PING, port, System.currentTimeMillis());
+    return new ClusterMessage(Type.PING, port);
   }
 
   /**
-   * Create for register online/offline message.
+   * Create a pong message.
+   */
+  public static ClusterMessage pong(int port) {
+    return new ClusterMessage(Type.PONG, port);
+  }
+
+  /**
+   * Create for control message.
    */
   private ClusterMessage(Type eventType, int port) {
     this.type = eventType;
     this.data = null;
-    this.timestamp = 0;
     this.port = port;
   }
 
@@ -64,17 +68,6 @@ public class ClusterMessage {
     this.type = Type.TRANSACTION;
     this.data = data;
     this.port = 0;
-    this.timestamp = 0;
-  }
-
-  /**
-   * Create for ping & pong.
-   */
-  private ClusterMessage(Type type, int port, long timestamp) {
-    this.type = type;
-    this.data = null;
-    this.port = port;
-    this.timestamp = timestamp;
   }
 
   @Override
@@ -107,9 +100,6 @@ public class ClusterMessage {
     return data;
   }
 
-  long getRTT() {
-    return System.currentTimeMillis() - timestamp;
-  }
 
   /**
    * Write the message in binary form.
@@ -122,9 +112,6 @@ public class ClusterMessage {
       dataOutput.write(data);
     } else {
       dataOutput.writeInt(port);
-      if (type == Type.PING || type == Type.PONG) {
-        dataOutput.writeLong(timestamp);
-      }
     }
     dataOutput.flush();
   }
@@ -142,21 +129,12 @@ public class ClusterMessage {
         return new ClusterMessage(data);
       case REGISTER:
       case DEREGISTER:
-        return new ClusterMessage(type, dataInput.readInt());
       case PING:
       case PONG:
-        return new ClusterMessage(type, dataInput.readInt(), dataInput.readLong());
+        return new ClusterMessage(type, dataInput.readInt());
       default:
         throw new UnsupportedOperationException("Unknown type: " + type);
     }
-  }
-
-  public ClusterMessage pong(int port) {
-    return new ClusterMessage(Type.PONG, port, timestamp);
-  }
-
-  public long getTimestamp() {
-    return timestamp;
   }
 
 }

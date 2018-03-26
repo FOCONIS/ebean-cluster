@@ -1,7 +1,6 @@
 package io.ebeaninternal.server.cluster.socket;
 
 import io.ebeaninternal.server.cluster.message.ClusterMessage;
-import io.ebeaninternal.server.cluster.message.ClusterMessage.Type;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,18 +13,20 @@ import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
 import java.util.Enumeration;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The client side of the socket clustering.
  */
-class SocketClient {
+public class SocketClient {
 
   private static final Logger logger = LoggerFactory.getLogger(SocketClient.class);
 
   private final InetSocketAddress address;
 
-  private final String hostPort;
+  private final String name;
 
   private final boolean local;
 
@@ -39,7 +40,7 @@ class SocketClient {
    */
   private final ReentrantLock lock;
 
-  private boolean online;
+  private final BlockingQueue<Object> pingQueue = new ArrayBlockingQueue(1);
 
   private Socket socket;
 
@@ -47,73 +48,89 @@ class SocketClient {
 
   private DataOutputStream dataOutput;
 
-  private int pings;
+  private boolean dynamicMember;
 
-  private int pongs;
-
-
-
+  private boolean online;
 
   /**
    * Construct with an IP address and port.
    */
-  SocketClient(InetSocketAddress address, int localPort) {
+  SocketClient(InetSocketAddress address, int localPort, String name) {
     this.lock = new ReentrantLock(false);
     this.address = address;
-    this.hostPort = address.getAddress().getHostAddress() + ":" + address.getPort();
+    this.name = name;
     this.localPort = localPort;
     this.local = address.getPort() == localPort && ownAddress();
   }
 
-  public String xgetHostPort() {
-    return hostPort;
+  public String getName() {
+    return name;
   }
 
   @Override
   public String toString() {
-    return hostPort;
+    return name;
   }
 
-  boolean isOnline() {
-    return online;
+  public boolean isOnline() {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+      return online;
+    } finally {
+      lock.unlock();
+    }
   }
 
-  void setOnline(boolean online) throws IOException {
+  // void setOnline(boolean online) throws IOException {
+  // final ReentrantLock lock = this.lock;
+  // lock.lock();
+  // try {
+  // this.online = online;
+  // if (online) {
+  // connect();
+  // } else {
+  // disconnect();
+  // }
+  // } finally {
+  // lock.unlock();
+  // }
+  // }
+
+  void setOffline() {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+      this.online = false;
+      disconnect();
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  private void reconnect() throws IOException {
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {
       if (online) {
-        setOnline();
-      } else {
         disconnect();
+        connect();
       }
     } finally {
       lock.unlock();
     }
   }
 
-  void reconnect() throws IOException {
+  private void disconnect() {
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {
-      disconnect();
-      connect();
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  void disconnect() {
-    final ReentrantLock lock = this.lock;
-    lock.lock();
-    try {
-      this.online = false;
       if (socket != null) {
         try {
           socket.close();
         } catch (IOException e) {
-          logger.info("Error disconnecting from Cluster member {}:{}",
-              address.getAddress().getHostAddress(), address.getPort(), e);
+          logger.info("Error disconnecting from Cluster member {}:{}", address.getAddress().getHostAddress(),
+              address.getPort(), e);
         }
         os = null;
         dataOutput = null;
@@ -124,16 +141,20 @@ class SocketClient {
     }
   }
 
-  boolean register() {
+  boolean register(boolean force) {
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {
+      if (!force && online) {
+        return false;
+      }
       try {
-        setOnline();
+        online = true;
         send(ClusterMessage.register(localPort));
         return true;
       } catch (IOException e) {
         disconnect();
+        online = false;
         return false;
       }
     } finally {
@@ -142,58 +163,43 @@ class SocketClient {
   }
 
   void send(ClusterMessage msg) throws IOException {
-    logger.debug("SEND -> {}:{}; {}", address.getAddress().getHostAddress(), address.getPort(), msg);
-    final ReentrantLock lock = this.lock;
-    lock.lock();
-    try {
-      if (online) {
-        if (msg.getType() == Type.PING) {
-          pings++;
+    if (online) {
+      logger.debug("SEND -> {}:{}; {}", address.getAddress().getHostAddress(), address.getPort(), msg);
+      final ReentrantLock lock = this.lock;
+      lock.lock();
+      try {
+        if (dataOutput == null) {
+          connect();
         }
-        msg.write(dataOutput);
+        try {
+          msg.write(dataOutput);
+        } catch (IOException e) {
+          reconnect();
+          logger.info("RETRY -> {}:{}; {}", address.getAddress().getHostAddress(), address.getPort(), msg);
+          msg.write(dataOutput);
+        }
+      } finally {
+        lock.unlock();
       }
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  /**
-   * Set whether the client is thought to be online.
-   */
-  private void setOnline() throws IOException {
-    if (!online) {
-      connect();
-      this.online = true;
     }
   }
 
   private void connect() throws IOException {
-    if (socket != null) {
-      throw new IllegalStateException("Already got a socket connection?");
-    }
-    Socket s = new Socket();
-    s.setKeepAlive(true);
-    s.connect(address);
-
-    this.socket = s;
-    this.os = socket.getOutputStream();
-    this.dataOutput = new DataOutputStream(os);
-  }
-
-  /**
-   * @param message
-   */
-  public void processPong(ClusterMessage message) {
     final ReentrantLock lock = this.lock;
     lock.lock();
     try {
-      pongs++;
-      long latency = System.currentTimeMillis() - message.getTimestamp();
-      logger.trace("PING: sent {}, recv {}, latency {} ms", pings, pongs, latency);
+      if (socket == null) {
+        Socket s = new Socket();
+        s.setKeepAlive(true);
+        s.connect(address);
+
+        this.socket = s;
+        this.os = socket.getOutputStream();
+        this.dataOutput = new DataOutputStream(os);
+      }
     } finally {
       lock.unlock();
     }
-
   }
 
   private boolean ownAddress() {
@@ -203,11 +209,11 @@ class SocketClient {
         NetworkInterface nic = nics.nextElement();
         if (!nic.isLoopback() && !nic.isVirtual()) {
           Enumeration<InetAddress> addresses = nic.getInetAddresses();
-          while (addresses.hasMoreElements()){
-              InetAddress ip = addresses.nextElement();
-              if (ip.equals(address.getAddress())) {
-                return true;
-              }
+          while (addresses.hasMoreElements()) {
+            InetAddress ip = addresses.nextElement();
+            if (ip.equals(address.getAddress())) {
+              return true;
+            }
           }
         }
       }
@@ -231,4 +237,19 @@ class SocketClient {
     return address.getPort();
   }
 
+  /**
+   * The ping queue should be empty when sending a ping and should be filled, when
+   * the pong arrives.
+   */
+  public BlockingQueue<Object> getPingQueue() {
+    return pingQueue;
+  }
+
+  public boolean isDynamicMember() {
+    return dynamicMember;
+  }
+
+  public void setDynamicMember(boolean dynamicMember) {
+    this.dynamicMember = dynamicMember;
+  }
 }

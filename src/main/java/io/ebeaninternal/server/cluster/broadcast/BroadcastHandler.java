@@ -1,6 +1,7 @@
 package io.ebeaninternal.server.cluster.broadcast;
 
-import io.ebeaninternal.server.cluster.socket.SocketClusterAutoDiscoveryBroadcast;
+import io.ebeaninternal.server.cluster.socket.SocketClient;
+import io.ebeaninternal.server.cluster.socket.SocketClusterBroadcast;
 
 import java.io.IOException;
 import java.io.StreamCorruptedException;
@@ -9,6 +10,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MulticastSocket;
 import java.net.SocketException;
+import java.util.Iterator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,8 @@ public class BroadcastHandler  {
 
   private final Thread txThread;
 
+  private final Thread pingThread;
+
   private final int txInterval;
 
   /**
@@ -42,14 +46,14 @@ public class BroadcastHandler  {
    */
   private volatile boolean doingShutdown;
 
-  private final SocketClusterAutoDiscoveryBroadcast scb;
+  private final SocketClusterBroadcast scb;
 
   private final BroadcastMessage message;
 
   private final DatagramPacket packet;
 ;
 
-  public BroadcastHandler(InetSocketAddress address, BroadcastMessage message, int txInterval, SocketClusterAutoDiscoveryBroadcast scb)
+  public BroadcastHandler(InetSocketAddress address, BroadcastMessage message, int txInterval, SocketClusterBroadcast scb)
       throws IOException {
 
     this.broadcastSocket = new MulticastSocket(address.getPort());
@@ -63,20 +67,25 @@ public class BroadcastHandler  {
 
     this.rxThread = new Thread(this::rxTask, "EbeanClusterBroadcastRX");
     this.txThread = new Thread(this::txTask, "EbeanClusterBroadcastTX");
+    this.pingThread = new Thread(this::checkPingTask, "EbeanClusterBroadcastPing");
     this.txInterval = txInterval;
 
 
   }
 
-  private void addMember(BroadcastMessage member, InetAddress sender) throws IOException {
-    if (!message.getDiscoveryGroup().equals(member.getDiscoveryGroup())) {
-      logger.debug("Broadcast message '{}' not for discoveryGroup '{}'", member, message.getDiscoveryGroup());
-    } else if (message.getHostUuid().equals(member.getHostUuid())) { // This is a packet from this instance
-      logger.trace("skip message from myself", member);
-    } else if (scb.addMember(sender.getHostAddress(), member.getClusterPort())) {
-      logger.info("Broadcast message '{}' processed successfully", member);
+  private void addMember(BroadcastMessage incomingMessage, InetAddress sender) throws IOException {
+    if (!message.getDiscoveryGroup().equals(incomingMessage.getDiscoveryGroup())) {
+      logger.trace("Broadcast message '{}' not for discoveryGroup '{}'", incomingMessage, message.getDiscoveryGroup());
+    } else if (message.getHostUuid().equals(incomingMessage.getHostUuid())) { // This is a packet from this instance
+      logger.trace("skip message from myself", incomingMessage);
     } else {
-      logger.trace("Broadcast message '{}' already processed", member);
+      SocketClient member = scb.registerMember(sender.getHostAddress(), incomingMessage.getClusterPort());
+      if (member != null) {
+        logger.debug("Broadcast message '{}' processed successfully", incomingMessage);
+        member.setDynamicMember(true);
+      } else {
+        logger.trace("Broadcast message '{}' already processed", incomingMessage);
+      }
     }
   }
 
@@ -141,6 +150,31 @@ public class BroadcastHandler  {
   }
 
   /**
+   * Runs the TX loop, until shutdown is called.
+   */
+  private void checkPingTask() {
+    int i=0;
+    while (!doingShutdown) {
+      i++;
+      Iterator<SocketClient> it = scb.getMembers().iterator();
+      while (it.hasNext()) {
+        SocketClient member = it.next();
+        if (member.isOnline()) {
+          System.out.println("Ping: " + member + " " + scb.ping(member) + " ms");
+        } else {
+          System.out.println("Offline: " + member);
+        }
+      }
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        //
+      }
+    }
+
+  }
+
+  /**
    * Start broadcasting.
    */
   public void start() {
@@ -149,6 +183,9 @@ public class BroadcastHandler  {
     this.txThread.start();
     this.rxThread.setDaemon(true);
     this.rxThread.start();
+    this.pingThread.setDaemon(true);
+    this.pingThread.start();
+
   }
 
   /**
@@ -156,14 +193,16 @@ public class BroadcastHandler  {
    */
   public void shutdown() {
     doingShutdown = true;
-
+    pingThread.interrupt();
     rxThread.interrupt();
     txThread.interrupt();
     broadcastSocket.close();
 
     try {
+      pingThread.join();
       rxThread.join();
       txThread.join();
+
     } catch (InterruptedException ie) {
       // OK to ignore as expected to Interrupt for shutdown.
     }

@@ -3,6 +3,9 @@ package io.ebeaninternal.server.cluster.socket;
 import io.ebeaninternal.server.cluster.ClusterBroadcast;
 import io.ebeaninternal.server.cluster.ClusterManager;
 import io.ebeaninternal.server.cluster.ClusterBroadcastConfig;
+import io.ebeaninternal.server.cluster.ClusterBroadcastConfig.Mode;
+import io.ebeaninternal.server.cluster.broadcast.BroadcastHandler;
+import io.ebeaninternal.server.cluster.broadcast.BroadcastMessage;
 import io.ebeaninternal.server.cluster.message.ClusterMessage;
 import io.ebeaninternal.server.cluster.message.ClusterMessage.Type;
 import io.ebeaninternal.server.cluster.message.MessageReadWrite;
@@ -14,10 +17,14 @@ import org.slf4j.LoggerFactory;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.net.BindException;
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -25,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SocketClusterBroadcast implements ClusterBroadcast {
 
-  public static final Logger clusterLogger = LoggerFactory.getLogger("io.ebean.Cluster");
+  private static final Logger clusterLogger = LoggerFactory.getLogger("io.ebean.Cluster");
 
   private static final Logger logger = LoggerFactory.getLogger(SocketClusterBroadcast.class);
 
@@ -35,36 +42,94 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
   private final MessageReadWrite messageReadWrite;
 
-  private final int localPort;
+  private final BroadcastHandler broadcastHandler;
 
   private final AtomicLong countOutgoing = new AtomicLong();
 
   private final AtomicLong countIncoming = new AtomicLong();
 
+  private int localPort;
 
-  public SocketClusterBroadcast(ClusterManager manager, ClusterBroadcastConfig config) {
+
+
+  public SocketClusterBroadcast(ClusterManager manager, ClusterBroadcastConfig config)   {
 
     this.messageReadWrite = new MessageReadWrite(manager);
 
-    List<String> members = config.getMembers();
+    if (config.getMode() == Mode.OFF) {
+      clusterLogger.info("Clustering is disabled. Not starting any cluster transport");
+      this.listener = null;
+      this.broadcastHandler = null;
+    } else {
+      try {
+        this.localPort = config.getPort();
+        if (this.localPort != 0) {
+          this.listener = createListener(config, localPort);
+        } else {
+          this.listener = createListenerOnRandomPort(config);
+        }
 
-    this.localPort = config.getPort();
-    clusterLogger.info("Clustering members[{}], cluster-port {}, auto-discovery: {}",
-        members, this.localPort, config.isAutoDiscovery());
+        List<String> members = config.getMembers();
 
-    for (String memberHostPort : members) {
-      InetSocketAddress member = parseFullName(memberHostPort);
-      SocketClient client = new SocketClient(member, localPort);
-      if (client.isLocal()) {
-        logger.info("Ignoring local address: {}", member);
-      } else {
-        clientMap.put(client.xgetHostPort(), client);
+        clusterLogger.info("Clustering members[{}], cluster-port {}, mode: {}", members, this.localPort,
+            config.getMode());
+
+        for (String memberHostPort : members) {
+          SocketClient member = createMember(memberHostPort);
+          if (member.isLocal()) {
+            logger.info("Ignoring local member: {}", member);
+          } else {
+            clientMap.put(memberHostPort, member);
+          }
+        }
+        // setup the autodiscovery broadcaster.
+        if (config.getMode() == Mode.AUTODISCOVERY) {
+          this.broadcastHandler = createBroadcastHandler(config, localPort);
+        } else {
+          this.broadcastHandler = null;
+        }
+      } catch (IOException ex) {
+        throw new RuntimeException("Error creating SocketClusterBroadcast", ex);
       }
     }
-    InetSocketAddress inetSocket = new InetSocketAddress(config.getBindAddr(), localPort);
-    this.listener = new SocketClusterListener(this, inetSocket, config.getThreadPoolName());
   }
 
+  private SocketClient createMember(String memberHostPort) {
+    return new SocketClient(parseFullName(memberHostPort), localPort, memberHostPort);
+  }
+
+  /**
+   * Tries to find an open port and creates a listener on it.
+   */
+  private SocketClusterListener createListenerOnRandomPort(ClusterBroadcastConfig config) throws IOException {
+    int i = 0;
+    while (true) {
+      try {
+        int rnd = (int) ((config.getPortHigh() - config.getPortLow()) * Math.random());
+        this.localPort = config.getPortLow() + rnd;
+        return createListener(config, this.localPort);
+      } catch (BindException be) {
+        logger.trace("Port {} already in use", this.localPort, be);
+        if (i++ > 10) {
+          throw be;
+        }
+      }
+    }
+  }
+
+  private SocketClusterListener createListener(ClusterBroadcastConfig config, int port) throws IOException {
+    InetSocketAddress inetSocket = new InetSocketAddress(config.getBindAddr(), localPort);
+    return new SocketClusterListener(this, inetSocket, config.getThreadPoolName());
+  }
+
+  /**
+   * create the auto discovery broadcast handler.
+   */
+  private BroadcastHandler createBroadcastHandler(ClusterBroadcastConfig config, int localPort) throws IOException {
+    InetSocketAddress discoveryAddresss = parseFullName(config.getMulticast());
+    BroadcastMessage broadcastMessage = new BroadcastMessage(config.getDiscoveryGroup(), UUID.randomUUID(), localPort);
+    return new BroadcastHandler(discoveryAddresss, broadcastMessage, config.getDiscoveryInterval(), this);
+  }
 
 
   /**
@@ -88,30 +153,23 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
 
   @Override
   public void startup() {
-    listener.startListening();
-    register();
+    if (listener != null) {
+      listener.startListening();
+      register();
+      if (broadcastHandler != null) {
+        broadcastHandler.start();
+      }
+    }
   }
 
   @Override
   public void shutdown() {
-    deregister();
-    listener.shutdown();
-  }
-
-  public boolean addMember(String hostIp, int clusterPort) throws IOException {
-    return addMember(new SocketClient(new InetSocketAddress(hostIp, clusterPort), localPort));
-  }
-
-  boolean addMember(SocketClient member) throws IOException {
-    if (clientMap.putIfAbsent(member.xgetHostPort(), member) == null) {
-      // send register message back to the member. Use our address
-      //ClusterMessage msg = ClusterMessage.register();
-      setMemberOnline(member.xgetHostPort(), true);
-      member.register();
-
-      return true;
-    } else {
-      return false;
+    if (listener != null) {
+      if (broadcastHandler != null) {
+        broadcastHandler.shutdown();
+      }
+      deregister();
+      listener.shutdown();
     }
   }
 
@@ -119,10 +177,9 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
    * Register with all the other members of the Cluster.
    */
   private void register() {
-    ClusterMessage msg = ClusterMessage.register(localPort);
     for (SocketClient member : clientMap.values()) {
-      boolean online = member.register();
-      clusterLogger.info("Register as online with member [{}]", member.xgetHostPort(), online);
+      member.register(true);
+      clusterLogger.info("Register as online with member [{}]", member);
     }
   }
 
@@ -132,25 +189,57 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
       // alternative would be to connect/disconnect here but prefer to use keep alive
       logger.trace("... send to member {} broadcast msg: {}", client, msg);
       client.send(msg);
-
     } catch (Exception ex) {
-      logger.error("Error sending message", ex);
-      try {
-        client.reconnect();
-      } catch (IOException e) {
-        logger.error("Error trying to reconnect", ex);
+      if (client.isDynamicMember()) {
+        client.setOffline();
+        clusterLogger.warn("Taking client {} offline. Error sending message {}", client, msg, ex);
+      } else {
+        clusterLogger.error("Error sending message {}", msg, ex);
       }
+
     }
   }
 
-  private void setMemberOnline(String fullName, boolean online) throws IOException {
-    clusterLogger.info("Cluster member [{}] online[{}]", fullName, online);
-    SocketClient member = clientMap.computeIfAbsent(fullName, key -> new SocketClient(parseFullName(key), localPort));
-    member.setOnline(online);
-    if (clusterLogger.isDebugEnabled()) {
-      for (SocketClient m : clientMap.values()) {
-        clusterLogger.debug("Member: {}, online: {}", m.xgetHostPort(), m.isOnline());
-      }
+  public SocketClient registerMember(String address, int port) throws IOException {
+    return registerMember(address + ":" + port);
+  }
+
+  public SocketClient registerMember(String fullName) throws IOException {
+    SocketClient member = clientMap.computeIfAbsent(fullName, this::createMember);
+    if (member.register(false)) {
+      clusterLogger.info("Cluster member [{}] set to online", fullName);
+      return member;
+    } else {
+      return null;
+    }
+  }
+
+  public void disconnectMember(String address, int port) throws IOException {
+     disconnectMember(address + ":" + port);
+  }
+
+  public void disconnectMember(String fullName) throws IOException {
+    SocketClient member = clientMap.get(fullName);
+    if (member != null) {
+      clusterLogger.info("Cluster member [{}] set to offline", fullName);
+      member.setOffline();
+    }
+  }
+
+  private void sendPong(String address, int port) throws IOException {
+    String fullName = address + ":" + port;
+    SocketClient member = clientMap.get(fullName);
+    if (member != null) {
+      ClusterMessage msg = ClusterMessage.pong(localPort);
+      member.send(msg);
+    }
+  }
+
+  private void processPong(String address, int port) throws IOException {
+    String fullName = address + ":" + port;
+    SocketClient member = clientMap.get(fullName);
+    if (member != null) {
+      member.getPingQueue().offer("");
     }
   }
 
@@ -167,22 +256,30 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     } catch (Exception e) {
       logger.error("Error sending RemoteTransactionEvent " + remoteTransEvent + " to cluster members.", e);
     }
-    ping();
-  }
-
-  public void ping() {
-    try {
-      countOutgoing.incrementAndGet();
-      ClusterMessage msg = ClusterMessage.ping(localPort);
-      broadcast(msg);
-    } catch (Exception e) {
-      logger.error("Error sending Ping to cluster members.", e);
-    }
   }
 
   private void broadcast(ClusterMessage msg) {
     for (SocketClient member : clientMap.values()) {
       send(member, msg);
+    }
+  }
+
+  public int ping(SocketClient member) {
+    if (!member.isOnline()) {
+      return -1;
+    }
+    try {
+      ClusterMessage msg = ClusterMessage.ping(localPort);
+      long start = System.currentTimeMillis();
+      send(member, msg);
+      if (member.getPingQueue().poll(2, TimeUnit.SECONDS) == null) {
+        return -1;
+      } else {
+        return (int) (System.currentTimeMillis() - start);
+      }
+    } catch (InterruptedException e) {
+      logger.error("Error sending Ping to cluster members.", e);
+      return -1;
     }
   }
 
@@ -194,7 +291,7 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     ClusterMessage msg = ClusterMessage.deregister(localPort);
     broadcast(msg);
     for (SocketClient member : clientMap.values()) {
-      member.disconnect();
+      member.setOffline();
     }
   }
 
@@ -214,33 +311,27 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
         countIncoming.incrementAndGet();
         RemoteTransactionEvent transEvent = messageReadWrite.read(message.getData());
         transEvent.run();
-        return true;
+        return false;
 
       } else {
-        String memberName = request.getSourceAddress()+":"+message.getPort();
         SocketClient member;
 
         switch (message.getType()) {
         case REGISTER:
-          setMemberOnline(memberName, true);
+          registerMember(request.getSourceAddress(), message.getPort());
           return false;
 
         case DEREGISTER:
-          setMemberOnline(memberName, true);
+          // we do not send a deregister message back.
+          disconnectMember(request.getSourceAddress(), message.getPort());
           return true;
 
         case PING:
-           member = clientMap.get(memberName);
-          if (member != null) {
-            member.send(message.pong(localPort));
-          }
+          sendPong(request.getSourceAddress(), message.getPort());
           return false;
 
         case PONG:
-          member = clientMap.get(memberName);
-          if (member != null) {
-            member.processPong(message);;
-          }
+          processPong(request.getSourceAddress(), message.getPort());
           return false;
 
         default:
@@ -287,6 +378,10 @@ public class SocketClusterBroadcast implements ClusterBroadcast {
     } catch (Exception ex) {
       throw new RuntimeException("Error parsing [" + hostAndPort + "] for the form [host:port]", ex);
     }
+  }
+
+  public Collection<SocketClient> getMembers() {
+    return clientMap.values();
   }
 
 }

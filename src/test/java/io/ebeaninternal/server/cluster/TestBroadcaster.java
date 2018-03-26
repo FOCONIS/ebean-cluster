@@ -44,8 +44,8 @@ public class TestBroadcaster {
   public void test() throws InterruptedException {
     ContainerConfig containerConfig = new ContainerConfig();
     Properties properties = new Properties();
-    properties.put("ebean.cluster.discovery.enabled", "true");
-    properties.put("ebean.cluster.discovery.interval", "5000");
+    properties.put("ebean.cluster.mode", "autodiscovery");
+    //properties.put("ebean.cluster.discovery.interval", "5000");
     //properties.put("ebean.cluster.discovery.net", "10.75.1.0/24");
     containerConfig.setProperties(properties);
     ClusterManager manager = new ClusterManager(containerConfig );
@@ -53,9 +53,9 @@ public class TestBroadcaster {
 
     EbeanServer server = new TestServer("test");
 
-    manager.registerServer(server );
+    manager.registerServer(server);
     for (int i = 0 ; i <  100 ; i++) {
-      Thread.sleep((int)(Math.random()*10000));
+      Thread.sleep((int)(Math.random()*100000));
       RemoteTransactionEvent event = new RemoteTransactionEvent("test");
       event.cacheClearAll();
       manager.broadcast(event);
